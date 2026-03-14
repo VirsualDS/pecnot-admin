@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum LicenseStatus {
+  active
+  suspended
+  expired
+}
+
+enum BillingCycle {
+  monthly
+  semiannual
+  annual
+}
+
+model Admin {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String?  @map("full_name")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  auditEvents  AuditEvent[]
+
+  @@map("admins")
+}
+
+model Studio {
+  id                    String         @id @default(uuid()) @db.Uuid
+  studioName            String         @map("studio_name")
+  loginEmail            String         @unique @map("login_email")
+  passwordHash          String         @map("password_hash")
+  licenseStatus         LicenseStatus  @default(active) @map("license_status")
+  billingCycle          BillingCycle   @map("billing_cycle")
+  licenseStartsAt       DateTime       @map("license_starts_at") @db.Timestamptz(6)
+  licenseExpiresAt      DateTime       @map("license_expires_at") @db.Timestamptz(6)
+  notes                 String?
+  lastSuccessfulCheckAt DateTime?      @map("last_successful_check_at") @db.Timestamptz(6)
+  createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  installations         Installation[]
+  clientSessions        ClientSession[]
+  auditEvents           AuditEvent[]
+
+  @@map("studios")
+}
+
+model Installation {
+  id                 String   @id @default(uuid()) @db.Uuid
+  studioId           String   @map("studio_id") @db.Uuid
+  machineFingerprint String   @map("machine_fingerprint")
+  machineName        String?  @map("machine_name")
+  osName             String?  @map("os_name")
+  appVersion         String?  @map("app_version")
+  firstSeenAt        DateTime @default(now()) @map("first_seen_at") @db.Timestamptz(6)
+  lastSeenAt         DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  lastIp             String?  @map("last_ip")
+  isRevoked          Boolean  @default(false) @map("is_revoked")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  studio             Studio         @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  clientSessions     ClientSession[]
+
+  @@unique([studioId, machineFingerprint], map: "installations_studio_id_machine_fingerprint_key")
+  @@index([studioId], map: "idx_installations_studio_id")
+  @@index([lastSeenAt], map: "idx_installations_last_seen_at")
+  @@map("installations")
+}
+
+model ClientSession {
+  id              String    @id @default(uuid()) @db.Uuid
+  studioId        String    @map("studio_id") @db.Uuid
+  installationId  String?   @map("installation_id") @db.Uuid
+  sessionTokenHash String   @unique @map("session_token_hash")
+  issuedAt        DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
+  lastValidatedAt DateTime  @default(now()) @map("last_validated_at") @db.Timestamptz(6)
+  expiresAt       DateTime? @map("expires_at") @db.Timestamptz(6)
+  isRevoked       Boolean   @default(false) @map("is_revoked")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  studio          Studio       @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  installation    Installation? @relation(fields: [installationId], references: [id], onDelete: SetNull)
+
+  @@index([studioId], map: "idx_client_sessions_studio_id")
+  @@index([installationId], map: "idx_client_sessions_installation_id")
+  @@index([lastValidatedAt], map: "idx_client_sessions_last_validated_at")
+  @@map("client_sessions")
+}
+
+model AuditEvent {
+  id           String    @id @default(uuid()) @db.Uuid
+  studioId     String?   @map("studio_id") @db.Uuid
+  adminId      String?   @map("admin_id") @db.Uuid
+  eventType    String    @map("event_type")
+  eventPayload Json?     @map("event_payload")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  studio       Studio?   @relation(fields: [studioId], references: [id], onDelete: SetNull)
+  admin        Admin?    @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([studioId], map: "idx_audit_events_studio_id")
+  @@index([adminId], map: "idx_audit_events_admin_id")
+  @@index([eventType], map: "idx_audit_events_event_type")
+  @@index([createdAt], map: "idx_audit_events_created_at")
+  @@map("audit_events")
+}
