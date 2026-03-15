@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
 function formatDate(value: Date | null): string {
@@ -60,14 +61,7 @@ export default async function HomePage() {
     }),
     prisma.studio.count({
       where: {
-        OR: [
-          { licenseStatus: "expired" },
-          {
-            licenseExpiresAt: {
-              lt: now,
-            },
-          },
-        ],
+        OR: [{ licenseStatus: "expired" }, { licenseExpiresAt: { lt: now } }],
       },
     }),
     prisma.clientSession.count({
@@ -106,7 +100,7 @@ export default async function HomePage() {
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10 lg:px-8">
-        <header className="flex flex-col gap-3">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.18em] text-zinc-500">
               PECNOT
@@ -114,12 +108,19 @@ export default async function HomePage() {
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950">
               Dashboard admin
             </h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
+              Vista operativa minima del motore licensing: studi, licenze, sessioni e installazioni.
+            </p>
           </div>
-          <p className="max-w-3xl text-sm leading-6 text-zinc-600">
-            Vista operativa minima del motore licensing. Qui leggiamo lo stato reale
-            di studi, licenze, sessioni e installazioni senza introdurre ancora UI
-            decorative o flussi inutili.
-          </p>
+
+          <div className="flex items-center gap-3">
+            <Link
+              href="/studios"
+              className="inline-flex items-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
+            >
+              Vai agli studi
+            </Link>
+          </div>
         </header>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -155,13 +156,22 @@ export default async function HomePage() {
         </section>
 
         <section className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
-          <div className="border-b border-zinc-200 px-5 py-4">
-            <h2 className="text-lg font-semibold tracking-tight text-zinc-950">
-              Studi aggiornati di recente
-            </h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              Primo blocco utile per avere subito visibilità sui record reali.
-            </p>
+          <div className="flex flex-col gap-3 border-b border-zinc-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight text-zinc-950">
+                Studi aggiornati di recente
+              </h2>
+              <p className="mt-1 text-sm text-zinc-500">
+                Primo blocco utile per avere subito visibilità sui record reali.
+              </p>
+            </div>
+
+            <Link
+              href="/studios"
+              className="inline-flex items-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
+            >
+              Apri elenco completo
+            </Link>
           </div>
 
           <div className="overflow-x-auto">
@@ -188,7 +198,12 @@ export default async function HomePage() {
                   recentStudios.map((studio) => (
                     <tr key={studio.id} className="align-top">
                       <td className="px-5 py-4 font-medium text-zinc-900">
-                        {studio.studioName}
+                        <Link
+                          href={`/studios/${studio.id}`}
+                          className="underline decoration-zinc-300 underline-offset-4 hover:text-zinc-700"
+                        >
+                          {studio.studioName}
+                        </Link>
                       </td>
                       <td className="px-5 py-4 text-zinc-600">{studio.loginEmail}</td>
                       <td className="px-5 py-4">
