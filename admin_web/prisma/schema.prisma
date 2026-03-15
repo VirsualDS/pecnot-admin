@@ -44,12 +44,17 @@ model Studio {
   licenseExpiresAt      DateTime       @map("license_expires_at") @db.Timestamptz(6)
   notes                 String?
   lastSuccessfulCheckAt DateTime?      @map("last_successful_check_at") @db.Timestamptz(6)
+
+  stripeCustomerId      String?        @unique @map("stripe_customer_id")
+  stripeSubscriptionId  String?        @unique @map("stripe_subscription_id")
+
   createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   installations         Installation[]
   clientSessions        ClientSession[]
   auditEvents           AuditEvent[]
+  passwordSetupTokens   PasswordSetupToken[]
 
   @@map("studios")
 }
@@ -68,7 +73,7 @@ model Installation {
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  studio             Studio         @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  studio             Studio          @relation(fields: [studioId], references: [id], onDelete: Cascade)
   clientSessions     ClientSession[]
 
   @@unique([studioId, machineFingerprint], map: "installations_studio_id_machine_fingerprint_key")
@@ -78,19 +83,19 @@ model Installation {
 }
 
 model ClientSession {
-  id              String    @id @default(uuid()) @db.Uuid
-  studioId        String    @map("studio_id") @db.Uuid
-  installationId  String?   @map("installation_id") @db.Uuid
-  sessionTokenHash String   @unique @map("session_token_hash")
-  issuedAt        DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
-  lastValidatedAt DateTime  @default(now()) @map("last_validated_at") @db.Timestamptz(6)
-  expiresAt       DateTime? @map("expires_at") @db.Timestamptz(6)
-  isRevoked       Boolean   @default(false) @map("is_revoked")
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               String    @id @default(uuid()) @db.Uuid
+  studioId         String    @map("studio_id") @db.Uuid
+  installationId   String?   @map("installation_id") @db.Uuid
+  sessionTokenHash String    @unique @map("session_token_hash")
+  issuedAt         DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
+  lastValidatedAt  DateTime  @default(now()) @map("last_validated_at") @db.Timestamptz(6)
+  expiresAt        DateTime? @map("expires_at") @db.Timestamptz(6)
+  isRevoked        Boolean   @default(false) @map("is_revoked")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  studio          Studio       @relation(fields: [studioId], references: [id], onDelete: Cascade)
-  installation    Installation? @relation(fields: [installationId], references: [id], onDelete: SetNull)
+  studio           Studio        @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  installation     Installation? @relation(fields: [installationId], references: [id], onDelete: SetNull)
 
   @@index([studioId], map: "idx_client_sessions_studio_id")
   @@index([installationId], map: "idx_client_sessions_installation_id")
@@ -114,4 +119,33 @@ model AuditEvent {
   @@index([eventType], map: "idx_audit_events_event_type")
   @@index([createdAt], map: "idx_audit_events_created_at")
   @@map("audit_events")
+}
+
+model PasswordSetupToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  studioId   String    @map("studio_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt     DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  studio     Studio    @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId], map: "idx_password_setup_tokens_studio_id")
+  @@index([expiresAt], map: "idx_password_setup_tokens_expires_at")
+  @@map("password_setup_tokens")
+}
+
+model StripeWebhookEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  stripeEventId String    @unique @map("stripe_event_id")
+  eventType     String    @map("event_type")
+  payload       Json?     @map("payload")
+  processedAt   DateTime  @default(now()) @map("processed_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([eventType], map: "idx_stripe_webhook_events_event_type")
+  @@index([processedAt], map: "idx_stripe_webhook_events_processed_at")
+  @@map("stripe_webhook_events")
 }
