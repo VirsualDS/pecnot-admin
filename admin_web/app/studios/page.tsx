@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function formatDate(value: Date | null): string {
   if (!value) return "—";
 
@@ -75,6 +78,12 @@ export default async function StudiosPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Link
+              href="/studios/new"
+              className="inline-flex items-center rounded-xl bg-zinc-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800"
+            >
+              Crea studio
+            </Link>
             <Link
               href="/"
               className="inline-flex items-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"

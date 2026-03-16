@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import StudioActions from "./studio-actions";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function formatDate(value: Date | null): string {
   if (!value) return "—";
 

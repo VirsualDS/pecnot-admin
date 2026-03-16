@@ -10,7 +10,13 @@ type AdminActionState = {
 async function callAdminApi(
   path: string,
   payload: Record<string, unknown>
-): Promise<{ ok: boolean; error?: string; licenseStatus?: string; revokedCount?: number }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  licenseStatus?: string;
+  revokedCount?: number;
+  studio?: { id: string };
+}> {
   const adminApiKey = process.env.ADMIN_API_KEY?.trim() ?? "";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() ?? "";
 
@@ -45,6 +51,7 @@ async function callAdminApi(
           error?: string;
           licenseStatus?: string;
           revokedCount?: number;
+          studio?: { id: string };
         }
       | null;
 
@@ -59,6 +66,7 @@ async function callAdminApi(
       ok: true,
       licenseStatus: data.licenseStatus,
       revokedCount: data.revokedCount,
+      studio: data.studio,
     };
   } catch (error) {
     console.error("Admin action bridge error:", error);
@@ -216,5 +224,47 @@ export async function changeStudioPasswordAction(
   return {
     ok: true,
     message: `Password aggiornata correttamente${typeof result.revokedCount === "number" ? `; sessioni revocate: ${result.revokedCount}` : ""}.`,
+  };
+}
+
+export async function deleteStudioAction(
+  _prevState: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const studioId = String(formData.get("studioId") ?? "").trim();
+  const confirmText = String(formData.get("confirmText") ?? "").trim();
+
+  if (!studioId) {
+    return {
+      ok: false,
+      message: "studioId mancante",
+    };
+  }
+
+  if (confirmText !== "ELIMINA") {
+    return {
+      ok: false,
+      message: 'Per confermare la cancellazione devi scrivere esattamente "ELIMINA".',
+    };
+  }
+
+  const result = await callAdminApi("/api/admin/delete-studio", {
+    studioId,
+    confirmText,
+  });
+
+  revalidatePath("/studios");
+  revalidatePath("/");
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: result.error || "Eliminazione studio fallita",
+    };
+  }
+
+  return {
+    ok: true,
+    message: "Studio eliminato correttamente.",
   };
 }

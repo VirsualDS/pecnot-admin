@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import {
   changeStudioPasswordAction,
+  deleteStudioAction,
   reactivateLicenseAction,
   revokeSessionsAction,
   suspendLicenseAction,
@@ -62,6 +63,11 @@ export default function StudioActions({
     initialState
   );
 
+  const [deleteState, deleteFormAction, deletePending] = useActionState(
+    deleteStudioAction,
+    initialState
+  );
+
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -96,7 +102,10 @@ export default function StudioActions({
         </p>
 
         <div className="mt-4 grid gap-4">
-          <form action={suspendFormAction} className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-4">
+          <form
+            action={suspendFormAction}
+            className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-4"
+          >
             <input type="hidden" name="studioId" value={studioId} />
             <label className="flex items-center gap-3 text-sm text-zinc-700">
               <input
@@ -116,7 +125,10 @@ export default function StudioActions({
             <MessageBox ok={suspendState.ok} message={suspendState.message} />
           </form>
 
-          <form action={reactivateFormAction} className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-4">
+          <form
+            action={reactivateFormAction}
+            className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-4"
+          >
             <input type="hidden" name="studioId" value={studioId} />
             <button
               type="submit"
@@ -125,7 +137,10 @@ export default function StudioActions({
             >
               {reactivatePending ? "Riattivazione in corso..." : "Riattiva licenza"}
             </button>
-            <MessageBox ok={reactivateState.ok} message={reactivateState.message} />
+            <MessageBox
+              ok={reactivateState.ok}
+              message={reactivateState.message}
+            />
           </form>
         </div>
       </div>
@@ -176,6 +191,45 @@ export default function StudioActions({
           </button>
 
           <MessageBox ok={passwordState.ok} message={passwordState.message} />
+        </form>
+      </div>
+
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 shadow-sm">
+        <h3 className="text-base font-semibold tracking-tight text-rose-800">
+          Elimina studio
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-rose-700">
+          Questa azione elimina definitivamente lo studio e i dati collegati.
+          Usala solo se sei sicuro. Per confermare devi scrivere esattamente
+          <span className="mx-1 font-semibold">ELIMINA</span>.
+        </p>
+
+        <form action={deleteFormAction} className="mt-4 flex flex-col gap-3">
+          <input type="hidden" name="studioId" value={studioId} />
+
+          <div className="flex flex-col gap-2">
+            <label htmlFor="confirmText" className="text-sm font-medium text-rose-800">
+              Conferma eliminazione
+            </label>
+            <input
+              id="confirmText"
+              name="confirmText"
+              type="text"
+              required
+              className="rounded-xl border border-rose-300 bg-white px-4 py-2.5 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-rose-500"
+              placeholder='Scrivi "ELIMINA"'
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={deletePending}
+            className="inline-flex items-center justify-center rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {deletePending ? "Eliminazione in corso..." : "Elimina studio"}
+          </button>
+
+          <MessageBox ok={deleteState.ok} message={deleteState.message} />
         </form>
       </div>
     </div>
