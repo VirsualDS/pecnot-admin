@@ -17,6 +17,10 @@ async function callAdminApi(
   licenseStatus?: string;
   revokedCount?: number;
   studio?: { id: string };
+  billingCycle?: string;
+  licenseStartsAt?: string;
+  licenseExpiresAt?: string;
+  notes?: string | null;
 }> {
   const adminApiKey = process.env.ADMIN_API_KEY?.trim() ?? "";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() ?? "";
@@ -53,6 +57,10 @@ async function callAdminApi(
           licenseStatus?: string;
           revokedCount?: number;
           studio?: { id: string };
+          billingCycle?: string;
+          licenseStartsAt?: string;
+          licenseExpiresAt?: string;
+          notes?: string | null;
         }
       | null;
 
@@ -68,6 +76,10 @@ async function callAdminApi(
       licenseStatus: data.licenseStatus,
       revokedCount: data.revokedCount,
       studio: data.studio,
+      billingCycle: data.billingCycle,
+      licenseStartsAt: data.licenseStartsAt,
+      licenseExpiresAt: data.licenseExpiresAt,
+      notes: data.notes,
     };
   } catch (error) {
     console.error("Admin action bridge error:", error);
@@ -225,6 +237,78 @@ export async function changeStudioPasswordAction(
   return {
     ok: true,
     message: `Password aggiornata correttamente${typeof result.revokedCount === "number" ? `; sessioni revocate: ${result.revokedCount}` : ""}.`,
+  };
+}
+
+export async function updateStudioLicenseAction(
+  _prevState: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const studioId = String(formData.get("studioId") ?? "").trim();
+  const billingCycle = String(formData.get("billingCycle") ?? "").trim();
+  const licenseStatus = String(formData.get("licenseStatus") ?? "").trim();
+  const licenseStartsAt = String(formData.get("licenseStartsAt") ?? "").trim();
+  const licenseExpiresAt = String(formData.get("licenseExpiresAt") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "");
+
+  if (!studioId) {
+    return {
+      ok: false,
+      message: "studioId mancante",
+    };
+  }
+
+  if (!billingCycle) {
+    return {
+      ok: false,
+      message: "Ciclo licenza obbligatorio",
+    };
+  }
+
+  if (!licenseStatus) {
+    return {
+      ok: false,
+      message: "Stato licenza obbligatorio",
+    };
+  }
+
+  if (!licenseStartsAt) {
+    return {
+      ok: false,
+      message: "Data inizio licenza obbligatoria",
+    };
+  }
+
+  if (!licenseExpiresAt) {
+    return {
+      ok: false,
+      message: "Data scadenza licenza obbligatoria",
+    };
+  }
+
+  const result = await callAdminApi("/api/admin/update-studio-license", {
+    studioId,
+    billingCycle,
+    licenseStatus,
+    licenseStartsAt,
+    licenseExpiresAt,
+    notes,
+  });
+
+  revalidatePath(`/studios/${studioId}`);
+  revalidatePath("/studios");
+  revalidatePath("/");
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: result.error || "Aggiornamento licenza fallito",
+    };
+  }
+
+  return {
+    ok: true,
+    message: "Licenza aggiornata correttamente.",
   };
 }
 

@@ -15,6 +15,11 @@ function formatDate(value: Date | null): string {
   }).format(value);
 }
 
+function formatDateInput(value: Date | null): string {
+  if (!value) return "";
+  return value.toISOString().slice(0, 10);
+}
+
 function getLicenseBadgeClass(status: "active" | "suspended" | "expired"): string {
   switch (status) {
     case "active":
@@ -249,7 +254,14 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
             </div>
           </div>
 
-          <StudioActions studioId={studio.id} licenseStatus={studio.licenseStatus} />
+          <StudioActions
+            studioId={studio.id}
+            licenseStatus={studio.licenseStatus}
+            billingCycle={studio.billingCycle}
+            licenseStartsAt={formatDateInput(studio.licenseStartsAt)}
+            licenseExpiresAt={formatDateInput(studio.licenseExpiresAt)}
+            notes={studio.notes ?? ""}
+          />
         </section>
 
         <section className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
