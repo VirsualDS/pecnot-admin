@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 type AdminActionState = {
   ok: boolean;
@@ -263,8 +264,5 @@ export async function deleteStudioAction(
     };
   }
 
-  return {
-    ok: true,
-    message: "Studio eliminato correttamente.",
-  };
+  redirect("/studios");
 }
