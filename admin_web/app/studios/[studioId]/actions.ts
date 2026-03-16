@@ -248,7 +248,6 @@ export async function updateStudioLicenseAction(
   const billingCycle = String(formData.get("billingCycle") ?? "").trim();
   const licenseStatus = String(formData.get("licenseStatus") ?? "").trim();
   const licenseStartsAt = String(formData.get("licenseStartsAt") ?? "").trim();
-  const licenseExpiresAt = String(formData.get("licenseExpiresAt") ?? "").trim();
   const notes = String(formData.get("notes") ?? "");
 
   if (!studioId) {
@@ -279,19 +278,11 @@ export async function updateStudioLicenseAction(
     };
   }
 
-  if (!licenseExpiresAt) {
-    return {
-      ok: false,
-      message: "Data scadenza licenza obbligatoria",
-    };
-  }
-
   const result = await callAdminApi("/api/admin/update-studio-license", {
     studioId,
     billingCycle,
     licenseStatus,
     licenseStartsAt,
-    licenseExpiresAt,
     notes,
   });
 

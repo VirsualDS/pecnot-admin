@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import {
   changeStudioPasswordAction,
   deleteStudioAction,
@@ -46,12 +46,34 @@ function MessageBox({
   );
 }
 
+function addMonths(dateString: string, months: number): string {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.toISOString().slice(0, 10);
+}
+
+function computeExpiresAt(
+  startsAt: string,
+  billingCycle: "monthly" | "semiannual" | "annual"
+): string {
+  if (!startsAt) return "";
+
+  switch (billingCycle) {
+    case "monthly":
+      return addMonths(startsAt, 1);
+    case "semiannual":
+      return addMonths(startsAt, 6);
+    case "annual":
+      return addMonths(startsAt, 12);
+  }
+}
+
 export default function StudioActions({
   studioId,
   licenseStatus,
   billingCycle,
   licenseStartsAt,
-  licenseExpiresAt,
   notes,
 }: StudioActionsProps) {
   const [revokeState, revokeFormAction, revokePending] = useActionState(
@@ -82,6 +104,15 @@ export default function StudioActions({
     initialState
   );
 
+  const [selectedBillingCycle, setSelectedBillingCycle] =
+    useState<"monthly" | "semiannual" | "annual">(billingCycle);
+  const [selectedLicenseStartsAt, setSelectedLicenseStartsAt] =
+    useState<string>(licenseStartsAt);
+
+  const derivedLicenseExpiresAt = useMemo(() => {
+    return computeExpiresAt(selectedLicenseStartsAt, selectedBillingCycle);
+  }, [selectedBillingCycle, selectedLicenseStartsAt]);
+
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -111,8 +142,8 @@ export default function StudioActions({
           Modifica licenza
         </h3>
         <p className="mt-2 text-sm leading-6 text-zinc-600">
-          Aggiorna manualmente ciclo, stato, data di inizio, data di scadenza e
-          note dello studio.
+          Aggiorna manualmente ciclo, stato, data di inizio e note dello studio.
+          La scadenza viene calcolata automaticamente e non è modificabile.
         </p>
 
         <form action={licenseFormAction} className="mt-4 flex flex-col gap-4">
@@ -126,7 +157,12 @@ export default function StudioActions({
               <select
                 id="billingCycle"
                 name="billingCycle"
-                defaultValue={billingCycle}
+                value={selectedBillingCycle}
+                onChange={(e) =>
+                  setSelectedBillingCycle(
+                    e.target.value as "monthly" | "semiannual" | "annual"
+                  )
+                }
                 disabled={licensePending}
                 className="rounded-xl border border-zinc-300 px-4 py-2.5 text-sm outline-none transition focus:border-zinc-500"
               >
@@ -161,23 +197,24 @@ export default function StudioActions({
                 id="licenseStartsAt"
                 name="licenseStartsAt"
                 type="date"
-                defaultValue={licenseStartsAt}
+                value={selectedLicenseStartsAt}
+                onChange={(e) => setSelectedLicenseStartsAt(e.target.value)}
                 disabled={licensePending}
                 className="rounded-xl border border-zinc-300 px-4 py-2.5 text-sm outline-none transition focus:border-zinc-500"
               />
             </div>
 
             <div className="flex flex-col gap-2">
-              <label htmlFor="licenseExpiresAt" className="text-sm font-medium text-zinc-700">
+              <label htmlFor="licenseExpiresAtView" className="text-sm font-medium text-zinc-700">
                 Scadenza licenza
               </label>
               <input
-                id="licenseExpiresAt"
-                name="licenseExpiresAt"
+                id="licenseExpiresAtView"
                 type="date"
-                defaultValue={licenseExpiresAt}
-                disabled={licensePending}
-                className="rounded-xl border border-zinc-300 px-4 py-2.5 text-sm outline-none transition focus:border-zinc-500"
+                value={derivedLicenseExpiresAt}
+                readOnly
+                disabled
+                className="rounded-xl border border-zinc-200 bg-zinc-100 px-4 py-2.5 text-sm text-zinc-700 outline-none"
               />
             </div>
           </div>

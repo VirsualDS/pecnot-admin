@@ -10,7 +10,6 @@ type UpdateStudioLicenseBody = {
   billingCycle?: BillingCycle;
   licenseStatus?: LicenseStatus;
   licenseStartsAt?: string;
-  licenseExpiresAt?: string;
   notes?: string;
 };
 
@@ -26,6 +25,26 @@ function isValidLicenseStatus(value: string): value is LicenseStatus {
   return value === "active" || value === "suspended" || value === "expired";
 }
 
+function addMonths(date: Date, months: number): Date {
+  const result = new Date(date);
+  result.setUTCMonth(result.getUTCMonth() + months);
+  return result;
+}
+
+function computeLicenseExpiresAt(
+  licenseStartsAt: Date,
+  billingCycle: BillingCycle
+): Date {
+  switch (billingCycle) {
+    case "monthly":
+      return addMonths(licenseStartsAt, 1);
+    case "semiannual":
+      return addMonths(licenseStartsAt, 6);
+    case "annual":
+      return addMonths(licenseStartsAt, 12);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const expectedKey = process.env.ADMIN_API_KEY?.trim() ?? "";
@@ -33,20 +52,14 @@ export async function POST(request: Request) {
 
     if (!expectedKey) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "ADMIN_API_KEY non configurata sul server",
-        },
+        { ok: false, error: "ADMIN_API_KEY non configurata sul server" },
         { status: 500 }
       );
     }
 
     if (!providedKey || providedKey !== expectedKey) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Non autorizzato",
-        },
+        { ok: false, error: "Non autorizzato" },
         { status: 401 }
       );
     }
@@ -58,91 +71,49 @@ export async function POST(request: Request) {
     const billingCycleRaw = body.billingCycle?.trim() ?? "";
     const licenseStatusRaw = body.licenseStatus?.trim() ?? "";
     const licenseStartsAtRaw = body.licenseStartsAt?.trim() ?? "";
-    const licenseExpiresAtRaw = body.licenseExpiresAt?.trim() ?? "";
     const notesRaw = body.notes ?? "";
 
     if (!studioId && !loginEmail) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "studioId o loginEmail sono obbligatori",
-        },
+        { ok: false, error: "studioId o loginEmail sono obbligatori" },
         { status: 400 }
       );
     }
 
     if (!isValidBillingCycle(billingCycleRaw)) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "billingCycle non valido",
-        },
+        { ok: false, error: "billingCycle non valido" },
         { status: 400 }
       );
     }
 
     if (!isValidLicenseStatus(licenseStatusRaw)) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "licenseStatus non valido",
-        },
+        { ok: false, error: "licenseStatus non valido" },
         { status: 400 }
       );
     }
 
     if (!licenseStartsAtRaw) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "licenseStartsAt è obbligatoria",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!licenseExpiresAtRaw) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "licenseExpiresAt è obbligatoria",
-        },
+        { ok: false, error: "licenseStartsAt è obbligatoria" },
         { status: 400 }
       );
     }
 
     const licenseStartsAt = new Date(licenseStartsAtRaw);
-    const licenseExpiresAt = new Date(licenseExpiresAtRaw);
 
     if (Number.isNaN(licenseStartsAt.getTime())) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "licenseStartsAt non valida",
-        },
+        { ok: false, error: "licenseStartsAt non valida" },
         { status: 400 }
       );
     }
 
-    if (Number.isNaN(licenseExpiresAt.getTime())) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "licenseExpiresAt non valida",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (licenseExpiresAt <= licenseStartsAt) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "licenseExpiresAt deve essere successiva a licenseStartsAt",
-        },
-        { status: 400 }
-      );
-    }
+    const licenseExpiresAt = computeLicenseExpiresAt(
+      licenseStartsAt,
+      billingCycleRaw
+    );
 
     const studio = await prisma.studio.findFirst({
       where: studioId ? { id: studioId } : { loginEmail },
@@ -160,10 +131,7 @@ export async function POST(request: Request) {
 
     if (!studio) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Studio non trovato",
-        },
+        { ok: false, error: "Studio non trovato" },
         { status: 404 }
       );
     }
@@ -204,6 +172,7 @@ export async function POST(request: Request) {
             licenseExpiresAt: licenseExpiresAt.toISOString(),
             notes,
           },
+          expiresAtDerivedFromCycle: true,
         },
       },
     });
@@ -225,10 +194,7 @@ export async function POST(request: Request) {
     console.error("Admin update-studio-license API error:", error);
 
     return NextResponse.json(
-      {
-        ok: false,
-        error: "Errore interno del server",
-      },
+      { ok: false, error: "Errore interno del server" },
       { status: 500 }
     );
   }
