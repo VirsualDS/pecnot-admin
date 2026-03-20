@@ -19,6 +19,13 @@ enum BillingCycle {
   annual
 }
 
+enum PendingCheckoutStatus {
+  pending
+  completed
+  expired
+  cancelled
+}
+
 model Admin {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
@@ -34,29 +41,59 @@ model Admin {
 }
 
 model Studio {
-  id                    String         @id @default(uuid()) @db.Uuid
-  studioName            String         @map("studio_name")
-  loginEmail            String         @unique @map("login_email")
-  passwordHash          String         @map("password_hash")
-  licenseStatus         LicenseStatus  @default(active) @map("license_status")
-  billingCycle          BillingCycle   @map("billing_cycle")
-  licenseStartsAt       DateTime       @map("license_starts_at") @db.Timestamptz(6)
-  licenseExpiresAt      DateTime       @map("license_expires_at") @db.Timestamptz(6)
+  id                    String                  @id @default(uuid()) @db.Uuid
+  studioName            String                  @map("studio_name")
+  loginEmail            String                  @unique @map("login_email")
+  passwordHash          String                  @map("password_hash")
+  licenseStatus         LicenseStatus           @default(active) @map("license_status")
+  billingCycle          BillingCycle            @map("billing_cycle")
+  licenseStartsAt       DateTime                @map("license_starts_at") @db.Timestamptz(6)
+  licenseExpiresAt      DateTime                @map("license_expires_at") @db.Timestamptz(6)
   notes                 String?
-  lastSuccessfulCheckAt DateTime?      @map("last_successful_check_at") @db.Timestamptz(6)
+  lastSuccessfulCheckAt DateTime?               @map("last_successful_check_at") @db.Timestamptz(6)
 
-  stripeCustomerId      String?        @unique @map("stripe_customer_id")
-  stripeSubscriptionId  String?        @unique @map("stripe_subscription_id")
+  stripeCustomerId      String?                 @unique @map("stripe_customer_id")
+  stripeSubscriptionId  String?                 @unique @map("stripe_subscription_id")
 
-  createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   installations         Installation[]
   clientSessions        ClientSession[]
   auditEvents           AuditEvent[]
   passwordSetupTokens   PasswordSetupToken[]
+  pendingCheckouts      PendingStudioCheckout[] @relation("CompletedStudioPendingCheckouts")
 
   @@map("studios")
+}
+
+model PendingStudioCheckout {
+  id                     String                 @id @default(uuid()) @db.Uuid
+  studioName             String                 @map("studio_name")
+  loginEmail             String                 @map("login_email")
+  passwordHash           String                 @map("password_hash")
+  billingCycle           BillingCycle           @map("billing_cycle")
+  status                 PendingCheckoutStatus  @default(pending) @map("status")
+
+  stripeCheckoutSessionId String?               @unique @map("stripe_checkout_session_id")
+  stripeCustomerId        String?               @map("stripe_customer_id")
+  stripeSubscriptionId    String?               @map("stripe_subscription_id")
+
+  completedStudioId      String?                @map("completed_studio_id") @db.Uuid
+  completedAt            DateTime?              @map("completed_at") @db.Timestamptz(6)
+  expiresAt              DateTime               @map("expires_at") @db.Timestamptz(6)
+
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  completedStudio        Studio?                @relation("CompletedStudioPendingCheckouts", fields: [completedStudioId], references: [id], onDelete: SetNull)
+
+  @@index([loginEmail], map: "idx_pending_studio_checkouts_login_email")
+  @@index([status], map: "idx_pending_studio_checkouts_status")
+  @@index([expiresAt], map: "idx_pending_studio_checkouts_expires_at")
+  @@index([createdAt], map: "idx_pending_studio_checkouts_created_at")
+  @@index([completedStudioId], map: "idx_pending_studio_checkouts_completed_studio_id")
+  @@map("pending_studio_checkouts")
 }
 
 model Installation {
