@@ -13,62 +13,106 @@ export default async function CheckoutSuccessPage({
   const sessionId =
     typeof params?.session_id === "string" ? params.session_id.trim() : "";
 
+  const downloadUrl = process.env.PECNOT_DOWNLOAD_URL?.trim() || "";
+
   return (
-    <main className="min-h-screen bg-neutral-950 text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-3xl items-center px-6 py-12">
-        <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur md:p-8">
-          <div className="mb-6">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
-              PECNOT
-            </p>
-            <h1 className="text-2xl font-semibold">Pagamento completato</h1>
-            <p className="mt-3 text-sm leading-6 text-white/70">
-              L’acquisto è andato a buon fine. La licenza PECNOT viene attivata
-              automaticamente e l’account creato in fase di acquisto è quello da
-              usare nel client desktop per il login.
-            </p>
+    <main className="min-h-screen bg-[#f3f5f9] text-[#0b1320]">
+      <div className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-6 py-12 lg:px-8">
+        <div className="w-full rounded-[28px] border border-[#d9e2ef] bg-white p-6 shadow-[0_18px_50px_rgba(11,19,32,0.08)] md:p-10">
+          <div className="flex flex-col gap-6 md:flex-row md:items-start">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-white shadow-[0_10px_25px_rgba(5,53,128,0.12)] ring-1 ring-[#dce5f3]">
+              <img
+                src="/favicon.ico"
+                alt="PECNOT"
+                className="h-14 w-14 object-contain"
+              />
+            </div>
+
+            <div className="flex-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c6c86]">
+                PECNOT
+              </p>
+              <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[#0b1320] md:text-4xl">
+                Pagamento completato
+              </h1>
+              <p className="mt-4 max-w-3xl text-[17px] leading-8 text-[#34445d]">
+                L’acquisto è andato a buon fine. La licenza PECNOT viene attivata
+                automaticamente e l’account creato in fase di acquisto è quello da
+                usare nel client desktop per il login.
+              </p>
+            </div>
           </div>
 
-          <div className="space-y-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-            <p>
+          <div className="mt-8 rounded-2xl border border-[rgba(5,53,128,0.16)] bg-[#eef4ff] p-5">
+            <p className="text-sm font-semibold text-[#053580]">
               Puoi accedere al client PECNOT con l’email e la password inserite
               durante l’attivazione.
             </p>
-            <p>
+            <p className="mt-2 text-sm text-[#24406e]">
               Non è necessario impostare di nuovo la password dopo il pagamento.
             </p>
           </div>
 
-          <div className="mt-6 space-y-4 text-sm leading-6 text-white/70">
-            <p>
-              Se hai già installato il client desktop, aprilo e usa le credenziali
-              appena create.
-            </p>
-            <p>
-              Se non hai ancora il client o hai bisogno di supporto, contatta
-              l’assistenza PECNOT.
-            </p>
-            {sessionId ? (
-              <p className="break-all text-xs text-white/45">
-                Riferimento sessione checkout: {sessionId}
+          <div className="mt-8 grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="space-y-4 text-[16px] leading-8 text-[#34445d]">
+              <p>
+                Il prossimo passo è scaricare il client PECNOT, installarlo sul tuo
+                PC e accedere con le credenziali appena create.
               </p>
-            ) : null}
-          </div>
+              <p>
+                Una volta dentro, potrai configurare la casella PEC e iniziare
+                l’archiviazione automatica.
+              </p>
+              <p>
+                PECNOT archivia in locale e non sostituisce il controllo umano:
+                prima di eliminare messaggi dal provider PEC bisogna sempre
+                verificare completezza e leggibilità dell’archivio creato.
+              </p>
 
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/activate"
-              className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
-            >
-              Torna alla pagina di attivazione
-            </Link>
+              {sessionId ? (
+                <p className="break-all text-xs leading-6 text-[#6a7890]">
+                  Riferimento sessione checkout: {sessionId}
+                </p>
+              ) : null}
+            </div>
 
-            <a
-              href="mailto:supporto.pecnot@virsual.it"
-              className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-transparent px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/5"
-            >
-              Contatta il supporto
-            </a>
+            <div className="rounded-2xl border border-[#dce5f3] bg-[#f8fafc] p-5">
+              <h2 className="text-lg font-bold text-[#0b1320]">
+                Prossimi passaggi
+              </h2>
+
+              <div className="mt-4 space-y-3 text-sm leading-7 text-[#41526d]">
+                <p>1. Scarica e installa PECNOT.</p>
+                <p>2. Apri il client desktop.</p>
+                <p>3. Accedi con email e password create durante l’acquisto.</p>
+                <p>4. Configura la tua casella PEC e avvia il monitoraggio.</p>
+              </div>
+
+              <div className="mt-6 flex flex-col gap-3">
+                {downloadUrl ? (
+                  <a
+                    href={downloadUrl}
+                    className="inline-flex items-center justify-center rounded-xl bg-[#053580] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#042d6d]"
+                  >
+                    Scarica PECNOT e installa
+                  </a>
+                ) : null}
+
+                <Link
+                  href="/activate"
+                  className="inline-flex items-center justify-center rounded-xl border border-[#cfd9e8] bg-white px-4 py-3 text-sm font-semibold text-[#053580] transition hover:bg-[#f3f7fd]"
+                >
+                  Torna alla pagina di attivazione
+                </Link>
+
+                <a
+                  href="mailto:supporto.pecnot@virsual.it"
+                  className="inline-flex items-center justify-center rounded-xl border border-[#cfd9e8] bg-white px-4 py-3 text-sm font-semibold text-[#0b1320] transition hover:bg-[#f8fafc]"
+                >
+                  Contatta il supporto
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </div>

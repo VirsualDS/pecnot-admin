@@ -52,6 +52,17 @@ model Studio {
   notes                 String?
   lastSuccessfulCheckAt DateTime?               @map("last_successful_check_at") @db.Timestamptz(6)
 
+  billingName           String?                 @map("billing_name")
+  vatNumber             String?                 @map("vat_number")
+  taxCode               String?                 @map("tax_code")
+  billingEmail          String?                 @map("billing_email")
+  recipientCode         String?                 @map("recipient_code")
+  addressLine1          String?                 @map("address_line_1")
+  city                  String?                 @map("city")
+  province              String?                 @map("province")
+  postalCode            String?                 @map("postal_code")
+  country               String?                 @map("country")
+
   stripeCustomerId      String?                 @unique @map("stripe_customer_id")
   stripeSubscriptionId  String?                 @unique @map("stripe_subscription_id")
 
@@ -68,25 +79,36 @@ model Studio {
 }
 
 model PendingStudioCheckout {
-  id                     String                 @id @default(uuid()) @db.Uuid
-  studioName             String                 @map("studio_name")
-  loginEmail             String                 @map("login_email")
-  passwordHash           String                 @map("password_hash")
-  billingCycle           BillingCycle           @map("billing_cycle")
-  status                 PendingCheckoutStatus  @default(pending) @map("status")
+  id                      String                 @id @default(uuid()) @db.Uuid
+  studioName              String                 @map("studio_name")
+  loginEmail              String                 @map("login_email")
+  passwordHash            String                 @map("password_hash")
+  billingCycle            BillingCycle           @map("billing_cycle")
+  status                  PendingCheckoutStatus  @default(pending) @map("status")
 
-  stripeCheckoutSessionId String?               @unique @map("stripe_checkout_session_id")
-  stripeCustomerId        String?               @map("stripe_customer_id")
-  stripeSubscriptionId    String?               @map("stripe_subscription_id")
+  billingName             String?                @map("billing_name")
+  vatNumber               String?                @map("vat_number")
+  taxCode                 String?                @map("tax_code")
+  billingEmail            String?                @map("billing_email")
+  recipientCode           String?                @map("recipient_code")
+  addressLine1            String?                @map("address_line_1")
+  city                    String?                @map("city")
+  province                String?                @map("province")
+  postalCode              String?                @map("postal_code")
+  country                 String?                @map("country")
 
-  completedStudioId      String?                @map("completed_studio_id") @db.Uuid
-  completedAt            DateTime?              @map("completed_at") @db.Timestamptz(6)
-  expiresAt              DateTime               @map("expires_at") @db.Timestamptz(6)
+  stripeCheckoutSessionId String?                @unique @map("stripe_checkout_session_id")
+  stripeCustomerId        String?                @map("stripe_customer_id")
+  stripeSubscriptionId    String?                @map("stripe_subscription_id")
 
-  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  completedStudioId       String?                @map("completed_studio_id") @db.Uuid
+  completedAt             DateTime?              @map("completed_at") @db.Timestamptz(6)
+  expiresAt               DateTime               @map("expires_at") @db.Timestamptz(6)
 
-  completedStudio        Studio?                @relation("CompletedStudioPendingCheckouts", fields: [completedStudioId], references: [id], onDelete: SetNull)
+  createdAt               DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  completedStudio         Studio?                @relation("CompletedStudioPendingCheckouts", fields: [completedStudioId], references: [id], onDelete: SetNull)
 
   @@index([loginEmail], map: "idx_pending_studio_checkouts_login_email")
   @@index([status], map: "idx_pending_studio_checkouts_status")

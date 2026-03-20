@@ -16,6 +16,16 @@ type CreateCheckoutSessionBody = {
   password?: string;
   confirmPassword?: string;
   plan?: string;
+  billingName?: string;
+  vatNumber?: string;
+  taxCode?: string;
+  billingEmail?: string;
+  recipientCode?: string;
+  addressLine1?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
+  country?: string;
 };
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -42,6 +52,10 @@ function mapPlanToBillingCycle(plan: string): "monthly" | "semiannual" | "annual
   }
 }
 
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CreateCheckoutSessionBody;
@@ -53,49 +67,51 @@ export async function POST(request: Request) {
       typeof body.confirmPassword === "string" ? body.confirmPassword : "";
     const rawPlan = normalizeText(body.plan).toLowerCase();
 
+    const billingName = normalizeText(body.billingName);
+    const vatNumber = normalizeText(body.vatNumber);
+    const taxCode = normalizeText(body.taxCode);
+    const billingEmail = normalizeCustomerEmail(normalizeText(body.billingEmail));
+    const recipientCode = normalizeText(body.recipientCode);
+    const addressLine1 = normalizeText(body.addressLine1);
+    const city = normalizeText(body.city);
+    const province = normalizeText(body.province).toUpperCase();
+    const postalCode = normalizeText(body.postalCode);
+    const country = normalizeText(body.country);
+
     const email = normalizeCustomerEmail(rawEmail);
     const plan = rawPlan;
 
     if (!studioName) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Nome studio obbligatorio",
-          field: "studioName",
-        },
+        { ok: false, error: "Nome studio obbligatorio", field: "studioName" },
         { status: 400 }
       );
     }
 
     if (!email) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Email obbligatoria",
-          field: "email",
-        },
+        { ok: false, error: "Email obbligatoria", field: "email" },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidEmail(email)) {
+      return NextResponse.json(
+        { ok: false, error: "Email non valida", field: "email" },
         { status: 400 }
       );
     }
 
     if (!isValidPecnotPlan(plan)) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Piano non valido",
-          field: "plan",
-        },
+        { ok: false, error: "Piano non valido", field: "plan" },
         { status: 400 }
       );
     }
 
     if (!password.trim()) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Password obbligatoria",
-          field: "password",
-        },
+        { ok: false, error: "Password obbligatoria", field: "password" },
         { status: 400 }
       );
     }
@@ -128,6 +144,105 @@ export async function POST(request: Request) {
           ok: false,
           error: "Le password non coincidono",
           field: "confirmPassword",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!billingName) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Intestazione fattura obbligatoria",
+          field: "billingName",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!vatNumber && !taxCode) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Inserisci almeno Partita IVA o Codice Fiscale",
+          field: "vatNumber",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!billingEmail) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Email o PEC di fatturazione obbligatoria",
+          field: "billingEmail",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidEmail(billingEmail)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Email o PEC di fatturazione non valida",
+          field: "billingEmail",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!addressLine1) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Indirizzo obbligatorio",
+          field: "addressLine1",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!city) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Città obbligatoria",
+          field: "city",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!province) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Provincia obbligatoria",
+          field: "province",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!postalCode) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "CAP obbligatorio",
+          field: "postalCode",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!country) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Nazione obbligatoria",
+          field: "country",
         },
         { status: 400 }
       );
@@ -190,6 +305,16 @@ export async function POST(request: Request) {
             passwordHash,
             billingCycle,
             status: "pending",
+            billingName,
+            vatNumber: vatNumber || null,
+            taxCode: taxCode || null,
+            billingEmail,
+            recipientCode: recipientCode || null,
+            addressLine1,
+            city,
+            province,
+            postalCode,
+            country,
             expiresAt,
             stripeCheckoutSessionId: null,
             stripeCustomerId: null,
@@ -211,6 +336,16 @@ export async function POST(request: Request) {
             passwordHash,
             billingCycle,
             status: "pending",
+            billingName,
+            vatNumber: vatNumber || null,
+            taxCode: taxCode || null,
+            billingEmail,
+            recipientCode: recipientCode || null,
+            addressLine1,
+            city,
+            province,
+            postalCode,
+            country,
             expiresAt,
           },
           select: {

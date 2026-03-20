@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import crypto from "node:crypto";
 import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
-import { hashPassword } from "@/lib/auth";
-import { getPecnotBaseUrl, getStripeServerClient, requireEnv } from "@/lib/stripe";
+import { getStripeServerClient, requireEnv } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
@@ -13,21 +11,27 @@ function addMonths(base: Date, months: number): Date {
   return d;
 }
 
-function getBillingCycleAndExpiry(plan: string, startsAt: Date) {
+function getBillingCycleAndExpiry(
+  plan: string,
+  startsAt: Date
+): {
+  billingCycle: "monthly" | "semiannual" | "annual";
+  expiresAt: Date;
+} {
   switch (plan) {
     case "monthly":
       return {
-        billingCycle: "monthly" as const,
+        billingCycle: "monthly",
         expiresAt: addMonths(startsAt, 1),
       };
     case "semiannual":
       return {
-        billingCycle: "semiannual" as const,
+        billingCycle: "semiannual",
         expiresAt: addMonths(startsAt, 6),
       };
     case "annual":
       return {
-        billingCycle: "annual" as const,
+        billingCycle: "annual",
         expiresAt: addMonths(startsAt, 12),
       };
     default:
@@ -35,31 +39,31 @@ function getBillingCycleAndExpiry(plan: string, startsAt: Date) {
   }
 }
 
-function sha256(value: string): string {
-  return crypto.createHash("sha256").update(value, "utf8").digest("hex");
-}
-
-function buildStudioNameFromEmail(email: string): string {
-  const local = email.split("@")[0]?.trim() || "Studio";
-  return `Studio ${local}`;
-}
-
 async function handleCheckoutSessionCompleted(event: Stripe.Event) {
   const session = event.data.object as Stripe.Checkout.Session;
 
   const metadata = session.metadata ?? {};
-    const customerId =
-    typeof session.customer === "string" ? session.customer : null;
+  const customerId = typeof session.customer === "string" ? session.customer : null;
   const subscriptionId =
     typeof session.subscription === "string" ? session.subscription : null;
   const app = metadata.app ?? "";
   const flow = metadata.flow ?? "";
-  const plan = metadata.plan ?? "";
-  const email =
-    (session.customer_details?.email || metadata.email || "").trim().toLowerCase();
+  const plan = (metadata.plan ?? "").trim().toLowerCase();
+  const pendingCheckoutId = (metadata.pendingCheckoutId ?? "").trim();
+  const email = (
+    session.customer_details?.email ||
+    metadata.email ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
 
   if (app !== "pecnot" || flow !== "first_purchase") {
     return;
+  }
+
+  if (!pendingCheckoutId) {
+    throw new Error("pendingCheckoutId mancante nei metadata Stripe");
   }
 
   if (!email) {
@@ -79,6 +83,75 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     return;
   }
 
+  const pendingCheckout = await prisma.pendingStudioCheckout.findUnique({
+    where: {
+      id: pendingCheckoutId,
+    },
+    select: {
+      id: true,
+      studioName: true,
+      loginEmail: true,
+      passwordHash: true,
+      billingCycle: true,
+      status: true,
+      expiresAt: true,
+      completedStudioId: true,
+      billingName: true,
+      vatNumber: true,
+      taxCode: true,
+      billingEmail: true,
+      recipientCode: true,
+      addressLine1: true,
+      city: true,
+      province: true,
+      postalCode: true,
+      country: true,
+    },
+  });
+
+  if (!pendingCheckout) {
+    throw new Error(`Pending checkout non trovato: ${pendingCheckoutId}`);
+  }
+
+  if (pendingCheckout.status === "completed" && pendingCheckout.completedStudioId) {
+    await prisma.stripeWebhookEvent.create({
+      data: {
+        stripeEventId: event.id,
+        eventType: event.type,
+        payload: event as unknown as object,
+      },
+    });
+
+    return;
+  }
+
+  const now = new Date();
+
+  if (pendingCheckout.status !== "pending") {
+    throw new Error(
+      `Pending checkout non utilizzabile. Stato attuale: ${pendingCheckout.status}`
+    );
+  }
+
+  if (pendingCheckout.expiresAt <= now) {
+    await prisma.pendingStudioCheckout.update({
+      where: {
+        id: pendingCheckout.id,
+      },
+      data: {
+        status: "expired",
+      },
+    });
+
+    throw new Error(`Pending checkout scaduto: ${pendingCheckout.id}`);
+  }
+
+  if (pendingCheckout.loginEmail !== email) {
+    throw new Error(
+      `Email checkout non coerente con pending checkout. Pending: ${pendingCheckout.loginEmail}, Stripe: ${email}`
+    );
+  }
+
   const existingStudio = await prisma.studio.findUnique({
     where: {
       loginEmail: email,
@@ -90,26 +163,39 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
   });
 
   if (existingStudio) {
-    await prisma.stripeWebhookEvent.create({
-      data: {
-        stripeEventId: event.id,
-        eventType: event.type,
-        payload: event as unknown as object,
-      },
-    });
-
-    await prisma.auditEvent.create({
-      data: {
-        studioId: existingStudio.id,
-        eventType: "stripe_checkout_completed_existing_email",
-        eventPayload: {
-          email,
-          sessionId: session.id,
-          customerId,
-          subscriptionId,
-          plan,
+    await prisma.$transaction(async (tx) => {
+      await tx.pendingStudioCheckout.update({
+        where: {
+          id: pendingCheckout.id,
         },
-      },
+        data: {
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: subscriptionId,
+        },
+      });
+
+      await tx.stripeWebhookEvent.create({
+        data: {
+          stripeEventId: event.id,
+          eventType: event.type,
+          payload: event as unknown as object,
+        },
+      });
+
+      await tx.auditEvent.create({
+        data: {
+          studioId: existingStudio.id,
+          eventType: "stripe_checkout_completed_existing_email",
+          eventPayload: {
+            email,
+            sessionId: session.id,
+            customerId,
+            subscriptionId,
+            plan,
+            pendingCheckoutId: pendingCheckout.id,
+          },
+        },
+      });
     });
 
     return;
@@ -118,25 +204,34 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
   const startsAt = new Date();
   const { billingCycle, expiresAt } = getBillingCycleAndExpiry(plan, startsAt);
 
-  const rawSetupToken = crypto.randomUUID() + crypto.randomBytes(24).toString("hex");
-  const tokenHash = sha256(rawSetupToken);
-  const tempPassword = crypto.randomBytes(24).toString("hex");
-  const passwordHash = await hashPassword(tempPassword);
+  if (billingCycle !== pendingCheckout.billingCycle) {
+    throw new Error(
+      `Billing cycle non coerente tra pending checkout e Stripe. Pending: ${pendingCheckout.billingCycle}, Stripe: ${billingCycle}`
+    );
+  }
 
-  const created = await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     const studio = await tx.studio.create({
       data: {
-        studioName: buildStudioNameFromEmail(email),
-        loginEmail: email,
-        passwordHash,
+        studioName: pendingCheckout.studioName,
+        loginEmail: pendingCheckout.loginEmail,
+        passwordHash: pendingCheckout.passwordHash,
         licenseStatus: "active",
         billingCycle,
         licenseStartsAt: startsAt,
         licenseExpiresAt: expiresAt,
-        stripeCustomerId:
-          typeof session.customer === "string" ? session.customer : null,
-        stripeSubscriptionId:
-          typeof session.subscription === "string" ? session.subscription : null,
+        billingName: pendingCheckout.billingName,
+        vatNumber: pendingCheckout.vatNumber,
+        taxCode: pendingCheckout.taxCode,
+        billingEmail: pendingCheckout.billingEmail,
+        recipientCode: pendingCheckout.recipientCode,
+        addressLine1: pendingCheckout.addressLine1,
+        city: pendingCheckout.city,
+        province: pendingCheckout.province,
+        postalCode: pendingCheckout.postalCode,
+        country: pendingCheckout.country,
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscriptionId,
         notes: "Creato automaticamente da checkout Stripe PECNOT",
       },
       select: {
@@ -145,11 +240,16 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
       },
     });
 
-    await tx.passwordSetupToken.create({
+    await tx.pendingStudioCheckout.update({
+      where: {
+        id: pendingCheckout.id,
+      },
       data: {
-        studioId: studio.id,
-        tokenHash,
-        expiresAt: addMonths(startsAt, 1),
+        status: "completed",
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscriptionId,
+        completedStudioId: studio.id,
+        completedAt: startsAt,
       },
     });
 
@@ -163,6 +263,12 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
           customerId,
           subscriptionId,
           plan,
+          pendingCheckoutId: pendingCheckout.id,
+          billingName: pendingCheckout.billingName,
+          vatNumber: pendingCheckout.vatNumber,
+          taxCode: pendingCheckout.taxCode,
+          billingEmail: pendingCheckout.billingEmail,
+          recipientCode: pendingCheckout.recipientCode,
         },
       },
     });
@@ -174,18 +280,6 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
         payload: event as unknown as object,
       },
     });
-
-    return studio;
-  });
-
-  const setupPasswordUrl = `${getPecnotBaseUrl()}/setup-password?token=${encodeURIComponent(
-    rawSetupToken
-  )}`;
-
-  console.log("PECNOT setup-password URL:", {
-    studioId: created.id,
-    email: created.loginEmail,
-    setupPasswordUrl,
   });
 }
 
