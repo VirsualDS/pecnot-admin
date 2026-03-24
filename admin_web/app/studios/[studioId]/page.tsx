@@ -46,6 +46,11 @@ function getLicenseLabel(status: "active" | "suspended" | "expired"): string {
   }
 }
 
+function displayValue(value: string | null | undefined): string {
+  const normalized = value?.trim();
+  return normalized ? normalized : "—";
+}
+
 type StudioDetailPageProps = {
   params: Promise<{
     studioId: string;
@@ -71,6 +76,16 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
       lastSuccessfulCheckAt: true,
       createdAt: true,
       updatedAt: true,
+      billingName: true,
+      vatNumber: true,
+      taxCode: true,
+      billingEmail: true,
+      recipientCode: true,
+      addressLine1: true,
+      city: true,
+      province: true,
+      postalCode: true,
+      country: true,
       installations: {
         orderBy: {
           lastSeenAt: "desc",
@@ -262,6 +277,80 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
             licenseExpiresAt={formatDateInput(studio.licenseExpiresAt)}
             notes={studio.notes ?? ""}
           />
+        </section>
+
+        <section className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+          <div className="border-b border-zinc-200 px-5 py-4">
+            <h2 className="text-lg font-semibold tracking-tight text-zinc-950">
+              Dati di fatturazione
+            </h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              Dati raccolti in fase di attivazione licenza.
+            </p>
+          </div>
+
+          <div className="grid gap-x-6 gap-y-4 px-5 py-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Intestazione fattura
+              </p>
+              <p className="mt-1 text-sm text-zinc-800">{displayValue(studio.billingName)}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Partita IVA
+              </p>
+              <p className="mt-1 text-sm text-zinc-800">{displayValue(studio.vatNumber)}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Codice fiscale
+              </p>
+              <p className="mt-1 text-sm text-zinc-800">{displayValue(studio.taxCode)}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Email / PEC fatturazione
+              </p>
+              <p className="mt-1 break-all text-sm text-zinc-800">
+                {displayValue(studio.billingEmail)}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Codice SDI
+              </p>
+              <p className="mt-1 text-sm text-zinc-800">{displayValue(studio.recipientCode)}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Nazione
+              </p>
+              <p className="mt-1 text-sm text-zinc-800">{displayValue(studio.country)}</p>
+            </div>
+
+            <div className="sm:col-span-2 lg:col-span-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Indirizzo
+              </p>
+              <p className="mt-1 text-sm text-zinc-800">
+                {[
+                  studio.addressLine1?.trim(),
+                  studio.postalCode?.trim(),
+                  studio.city?.trim(),
+                  studio.province?.trim(),
+                  studio.country?.trim(),
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "—"}
+              </p>
+            </div>
+          </div>
         </section>
 
         <section className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
