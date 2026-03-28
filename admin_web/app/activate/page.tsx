@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type PecnotPlan = "monthly" | "semiannual" | "annual";
@@ -67,12 +67,10 @@ function normalizeText(value: string): string {
 function ActivatePageInner() {
   const searchParams = useSearchParams();
 
-  const initialPlan = useMemo<PecnotPlan>(() => {
+  const [selectedPlan, setSelectedPlan] = useState<PecnotPlan>(() => {
     const fromQuery = searchParams.get("plan");
     return isValidPlan(fromQuery) ? fromQuery : "annual";
-  }, [searchParams]);
-
-  const [selectedPlan, setSelectedPlan] = useState<PecnotPlan>(initialPlan);
+  });
 
   const [studioName, setStudioName] = useState("");
   const [email, setEmail] = useState("");
@@ -93,13 +91,6 @@ function ActivatePageInner() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    const fromQuery = searchParams.get("plan");
-    if (isValidPlan(fromQuery)) {
-      setSelectedPlan(fromQuery);
-    }
-  }, [searchParams]);
 
   function validate(): boolean {
     const nextErrors: FieldErrors = {};

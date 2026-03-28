@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
+import { sendPecnotActivationEmail } from "@/lib/mail";
 import { getStripeServerClient, requireEnv } from "@/lib/stripe";
 
 export const runtime = "nodejs";
@@ -22,6 +23,16 @@ type StripeInvoiceWithMaybeRefs = Stripe.Invoice & {
   subscription?: string | Stripe.Subscription | null;
   customer?: string | Stripe.Customer | Stripe.DeletedCustomer | null;
   next_payment_attempt?: number | null;
+};
+
+type ActivationEmailPayload = {
+  studioName: string;
+  recipientEmail: string;
+  loginEmail: string;
+  billingCycle: BillingCycle;
+  licenseStartsAt: Date;
+  licenseExpiresAt: Date;
+  downloadUrl: string;
 };
 
 function addMonths(base: Date, months: number): Date {
@@ -419,7 +430,9 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     );
   }
 
-  await prisma.$transaction(async (tx) => {
+  const activationEmailPayload = await prisma.$transaction<
+    ActivationEmailPayload | null
+  >(async (tx) => {
     const studio = await tx.studio.create({
       data: {
         studioName: pendingCheckout.studioName,
@@ -445,7 +458,12 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
       },
       select: {
         id: true,
+        studioName: true,
         loginEmail: true,
+        billingEmail: true,
+        billingCycle: true,
+        licenseStartsAt: true,
+        licenseExpiresAt: true,
       },
     });
 
@@ -489,7 +507,45 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
         payload: event as unknown as object,
       },
     });
+
+    const downloadUrl = process.env.PECNOT_DOWNLOAD_URL?.trim() || "";
+    if (!downloadUrl) {
+      console.error(
+        "PECNOT activation email skipped: PECNOT_DOWNLOAD_URL mancante in environment."
+      );
+      return null;
+    }
+
+    const recipientEmail =
+      studio.billingEmail?.trim().toLowerCase() ||
+      pendingCheckout.billingEmail?.trim().toLowerCase() ||
+      studio.loginEmail.trim().toLowerCase();
+
+    return {
+      studioName: studio.studioName,
+      recipientEmail,
+      loginEmail: studio.loginEmail,
+      billingCycle: studio.billingCycle,
+      licenseStartsAt: studio.licenseStartsAt,
+      licenseExpiresAt: studio.licenseExpiresAt,
+      downloadUrl,
+    };
   });
+
+  if (!activationEmailPayload) {
+    return;
+  }
+
+  try {
+    await sendPecnotActivationEmail(activationEmailPayload);
+  } catch (error) {
+    console.error("Invio mail attivazione PECNOT fallito:", {
+      stripeEventId: event.id,
+      studioLoginEmail: activationEmailPayload.loginEmail,
+      recipientEmail: activationEmailPayload.recipientEmail,
+      error,
+    });
+  }
 }
 
 async function handleInvoicePaid(event: Stripe.Event) {
