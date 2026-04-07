@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type LicenseStatus = "active" | "trial" | "suspended" | "expired";
+
 function formatDate(value: Date | null): string {
   if (!value) return "—";
 
@@ -13,10 +15,12 @@ function formatDate(value: Date | null): string {
   }).format(value);
 }
 
-function getLicenseBadgeClass(status: "active" | "suspended" | "expired"): string {
+function getLicenseBadgeClass(status: LicenseStatus): string {
   switch (status) {
     case "active":
       return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+    case "trial":
+      return "bg-sky-50 text-sky-700 ring-1 ring-sky-200";
     case "suspended":
       return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
     case "expired":
@@ -26,10 +30,12 @@ function getLicenseBadgeClass(status: "active" | "suspended" | "expired"): strin
   }
 }
 
-function getLicenseLabel(status: "active" | "suspended" | "expired"): string {
+function getLicenseLabel(status: LicenseStatus): string {
   switch (status) {
     case "active":
       return "Attiva";
+    case "trial":
+      return "Trial";
     case "suspended":
       return "Sospesa";
     case "expired":
@@ -98,7 +104,9 @@ export default async function StudiosPage() {
             <h2 className="text-lg font-semibold tracking-tight text-zinc-950">
               Elenco studi
             </h2>
-            <p className="mt-1 text-sm text-zinc-500">Totale record: {studios.length}</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              Totale record: {studios.length}
+            </p>
           </div>
 
           <div className="overflow-x-auto">
@@ -121,7 +129,10 @@ export default async function StudiosPage() {
               <tbody className="divide-y divide-zinc-100">
                 {studios.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-5 py-8 text-center text-zinc-500">
+                    <td
+                      colSpan={10}
+                      className="px-5 py-8 text-center text-zinc-500"
+                    >
                       Nessuno studio presente.
                     </td>
                   </tr>
@@ -136,17 +147,21 @@ export default async function StudiosPage() {
                           {studio.studioName}
                         </Link>
                       </td>
-                      <td className="px-5 py-4 text-zinc-600">{studio.loginEmail}</td>
+                      <td className="px-5 py-4 text-zinc-600">
+                        {studio.loginEmail}
+                      </td>
                       <td className="px-5 py-4">
                         <span
                           className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getLicenseBadgeClass(
-                            studio.licenseStatus
+                            studio.licenseStatus as LicenseStatus
                           )}`}
                         >
-                          {getLicenseLabel(studio.licenseStatus)}
+                          {getLicenseLabel(studio.licenseStatus as LicenseStatus)}
                         </span>
                       </td>
-                      <td className="px-5 py-4 text-zinc-600">{studio.billingCycle}</td>
+                      <td className="px-5 py-4 text-zinc-600">
+                        {studio.billingCycle}
+                      </td>
                       <td className="px-5 py-4 text-zinc-600">
                         {formatDate(studio.licenseStartsAt)}
                       </td>

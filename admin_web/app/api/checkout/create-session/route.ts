@@ -2,13 +2,17 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
 import {
+  getPecnotBaseUrl,
   getPecnotCancelUrl,
   getPecnotSuccessUrl,
   getStripePriceId,
   getStripeServerClient,
+  isPaidPecnotPlan,
   isValidPecnotPlan,
   normalizeCustomerEmail,
 } from "@/lib/stripe";
+
+type BillingCycle = "trial" | "monthly" | "semiannual" | "annual";
 
 type CreateCheckoutSessionBody = {
   studioName?: string;
@@ -30,6 +34,7 @@ type CreateCheckoutSessionBody = {
 
 const MIN_PASSWORD_LENGTH = 8;
 const PENDING_CHECKOUT_TTL_HOURS = 48;
+const TRIAL_DURATION_DAYS = 7;
 
 function normalizeText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -39,8 +44,14 @@ function addHours(base: Date, hours: number): Date {
   return new Date(base.getTime() + hours * 60 * 60 * 1000);
 }
 
-function mapPlanToBillingCycle(plan: string): "monthly" | "semiannual" | "annual" {
+function addDays(base: Date, days: number): Date {
+  return new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+function mapPlanToBillingCycle(plan: string): BillingCycle {
   switch (plan) {
+    case "trial":
+      return "trial";
     case "monthly":
       return "monthly";
     case "semiannual":
@@ -54,6 +65,10 @@ function mapPlanToBillingCycle(plan: string): "monthly" | "semiannual" | "annual
 
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function getTrialSuccessUrl(): string {
+  return `${getPecnotBaseUrl()}/checkout/success?mode=trial`;
 }
 
 export async function POST(request: Request) {
@@ -277,6 +292,91 @@ export async function POST(request: Request) {
     const billingCycle = mapPlanToBillingCycle(plan);
     const passwordHash = await hashPassword(password);
     const now = new Date();
+
+    if (plan === "trial") {
+      const licenseStartsAt = now;
+      const licenseExpiresAt = addDays(now, TRIAL_DURATION_DAYS);
+
+      const studio = await prisma.$transaction(async (tx) => {
+        const createdStudio = await tx.studio.create({
+          data: {
+            studioName,
+            loginEmail: email,
+            passwordHash,
+            licenseStatus: "trial",
+            billingCycle,
+            licenseStartsAt,
+            licenseExpiresAt,
+            billingName,
+            vatNumber: vatNumber || null,
+            taxCode: taxCode || null,
+            billingEmail,
+            recipientCode: recipientCode || null,
+            addressLine1,
+            city,
+            province,
+            postalCode,
+            country,
+            notes: `Trial gratuita PECNOT attivata automaticamente per ${TRIAL_DURATION_DAYS} giorni`,
+          },
+          select: {
+            id: true,
+            studioName: true,
+            loginEmail: true,
+            licenseStatus: true,
+            billingCycle: true,
+            licenseStartsAt: true,
+            licenseExpiresAt: true,
+          },
+        });
+
+        await tx.auditEvent.create({
+          data: {
+            studioId: createdStudio.id,
+            eventType: "trial_activated_from_public_flow",
+            eventPayload: {
+              plan: "trial",
+              studioName,
+              loginEmail: email,
+              billingName,
+              vatNumber: vatNumber || null,
+              taxCode: taxCode || null,
+              billingEmail,
+              recipientCode: recipientCode || null,
+              addressLine1,
+              city,
+              province,
+              postalCode,
+              country,
+              licenseStartsAt: licenseStartsAt.toISOString(),
+              licenseExpiresAt: licenseExpiresAt.toISOString(),
+              durationDays: TRIAL_DURATION_DAYS,
+            },
+          },
+        });
+
+        return createdStudio;
+      });
+
+      return NextResponse.json({
+        ok: true,
+        mode: "trial",
+        url: getTrialSuccessUrl(),
+        studioId: studio.id,
+        licenseStatus: studio.licenseStatus,
+        billingCycle: studio.billingCycle,
+        licenseStartsAt: studio.licenseStartsAt.toISOString(),
+        licenseExpiresAt: studio.licenseExpiresAt.toISOString(),
+      });
+    }
+
+    if (!isPaidPecnotPlan(plan)) {
+      return NextResponse.json(
+        { ok: false, error: "Piano non valido", field: "plan" },
+        { status: 400 }
+      );
+    }
+
     const expiresAt = addHours(now, PENDING_CHECKOUT_TTL_HOURS);
 
     const existingPending = await prisma.pendingStudioCheckout.findFirst({
@@ -401,6 +501,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
+      mode: "paid",
       url: session.url,
       sessionId: session.id,
       pendingCheckoutId: pendingCheckout.id,

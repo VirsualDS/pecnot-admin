@@ -3,6 +3,7 @@ import Link from "next/link";
 type CheckoutSuccessPageProps = {
   searchParams?: Promise<{
     session_id?: string;
+    mode?: string;
   }>;
 };
 
@@ -12,6 +13,8 @@ export default async function CheckoutSuccessPage({
   const params = searchParams ? await searchParams : undefined;
   const sessionId =
     typeof params?.session_id === "string" ? params.session_id.trim() : "";
+  const mode = typeof params?.mode === "string" ? params.mode.trim().toLowerCase() : "";
+  const isTrial = mode === "trial";
 
   const downloadUrl = process.env.PECNOT_DOWNLOAD_URL?.trim() || "";
 
@@ -33,31 +36,35 @@ export default async function CheckoutSuccessPage({
                 PECNOT
               </p>
               <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[#0b1320] md:text-4xl">
-                Pagamento completato
+                {isTrial ? "Prova gratuita attivata" : "Pagamento completato"}
               </h1>
               <p className="mt-4 max-w-3xl text-[17px] leading-8 text-[#34445d]">
-                L’acquisto è andato a buon fine. La licenza PECNOT viene attivata
-                automaticamente e l’account creato in fase di acquisto è quello da
-                usare nel client desktop per il login.
+                {isTrial
+                  ? "La prova gratuita di PECNOT è attiva. L’account creato in fase di attivazione è già pronto e può essere usato nel client desktop per il login."
+                  : "L’acquisto è andato a buon fine. La licenza PECNOT viene attivata automaticamente e l’account creato in fase di acquisto è quello da usare nel client desktop per il login."}
               </p>
             </div>
           </div>
 
           <div className="mt-8 rounded-2xl border border-[rgba(5,53,128,0.16)] bg-[#eef4ff] p-5">
             <p className="text-sm font-semibold text-[#053580]">
-              Puoi accedere al client PECNOT con l’email e la password inserite
-              durante l’attivazione.
+              {isTrial
+                ? "Puoi accedere subito al client PECNOT con l’email e la password inserite durante l’attivazione della prova."
+                : "Puoi accedere al client PECNOT con l’email e la password inserite durante l’attivazione."}
             </p>
             <p className="mt-2 text-sm text-[#24406e]">
-              Non è necessario impostare di nuovo la password dopo il pagamento.
+              {isTrial
+                ? "La prova gratuita dura 7 giorni e non prevede addebiti automatici."
+                : "Non è necessario impostare di nuovo la password dopo il pagamento."}
             </p>
           </div>
 
           <div className="mt-8 grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="space-y-4 text-[16px] leading-8 text-[#34445d]">
               <p>
-                Il prossimo passo è scaricare il client PECNOT, installarlo sul tuo
-                PC e accedere con le credenziali appena create.
+                {isTrial
+                  ? "Il prossimo passo è scaricare il client PECNOT, installarlo sul tuo PC e accedere con le credenziali appena create per iniziare la prova."
+                  : "Il prossimo passo è scaricare il client PECNOT, installarlo sul tuo PC e accedere con le credenziali appena create."}
               </p>
               <p>
                 Una volta dentro, potrai configurare la casella PEC e iniziare
@@ -69,7 +76,14 @@ export default async function CheckoutSuccessPage({
                 verificare completezza e leggibilità dell’archivio creato.
               </p>
 
-              {sessionId ? (
+              {isTrial ? (
+                <p className="text-sm leading-7 text-[#41526d]">
+                  Alla scadenza della prova potrai scegliere un piano a pagamento
+                  per continuare a usare PECNOT senza interruzioni.
+                </p>
+              ) : null}
+
+              {!isTrial && sessionId ? (
                 <p className="break-all text-xs leading-6 text-[#6a7890]">
                   Riferimento sessione checkout: {sessionId}
                 </p>
@@ -84,7 +98,11 @@ export default async function CheckoutSuccessPage({
               <div className="mt-4 space-y-3 text-sm leading-7 text-[#41526d]">
                 <p>1. Scarica e installa PECNOT.</p>
                 <p>2. Apri il client desktop.</p>
-                <p>3. Accedi con email e password create durante l’acquisto.</p>
+                <p>
+                  {isTrial
+                    ? "3. Accedi con email e password create durante l’attivazione della prova."
+                    : "3. Accedi con email e password create durante l’acquisto."}
+                </p>
                 <p>4. Configura la tua casella PEC e avvia il monitoraggio.</p>
               </div>
 

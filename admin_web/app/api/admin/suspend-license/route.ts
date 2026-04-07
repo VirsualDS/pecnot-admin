@@ -7,6 +7,8 @@ type SuspendLicenseBody = {
   revokeSessions?: boolean;
 };
 
+type LicenseStatus = "active" | "trial" | "suspended" | "expired";
+
 function getAdminApiKey(request: Request): string {
   return request.headers.get("x-admin-api-key")?.trim() ?? "";
 }
@@ -103,7 +105,8 @@ export async function POST(request: Request) {
         eventType: "admin_suspend_license",
         eventPayload: {
           loginEmail: studio.loginEmail,
-          previousLicenseStatus: studio.licenseStatus,
+          previousLicenseStatus: studio.licenseStatus as LicenseStatus,
+          newLicenseStatus: "suspended" as LicenseStatus,
           revokeSessions,
           revokedCount,
         },

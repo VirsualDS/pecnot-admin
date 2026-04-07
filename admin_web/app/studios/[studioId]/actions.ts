@@ -3,25 +3,30 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+type LicenseStatus = "active" | "trial" | "suspended" | "expired";
+type BillingCycle = "trial" | "monthly" | "semiannual" | "annual";
+
 type AdminActionState = {
   ok: boolean;
   message: string;
 };
 
-async function callAdminApi(
-  path: string,
-  payload: Record<string, unknown>
-): Promise<{
+type AdminApiResponse = {
   ok: boolean;
   error?: string;
-  licenseStatus?: string;
+  licenseStatus?: LicenseStatus;
   revokedCount?: number;
   studio?: { id: string };
-  billingCycle?: string;
+  billingCycle?: BillingCycle;
   licenseStartsAt?: string;
   licenseExpiresAt?: string;
   notes?: string | null;
-}> {
+};
+
+async function callAdminApi(
+  path: string,
+  payload: Record<string, unknown>
+): Promise<AdminApiResponse> {
   const adminApiKey = process.env.ADMIN_API_KEY?.trim() ?? "";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() ?? "";
 
@@ -51,17 +56,7 @@ async function callAdminApi(
     });
 
     const data = (await response.json().catch(() => null)) as
-      | {
-          ok?: boolean;
-          error?: string;
-          licenseStatus?: string;
-          revokedCount?: number;
-          studio?: { id: string };
-          billingCycle?: string;
-          licenseStartsAt?: string;
-          licenseExpiresAt?: string;
-          notes?: string | null;
-        }
+      | Partial<AdminApiResponse>
       | null;
 
     if (!response.ok || !data?.ok) {
@@ -121,7 +116,11 @@ export async function revokeSessionsAction(
 
   return {
     ok: true,
-    message: `Sessioni revocate correttamente${typeof result.revokedCount === "number" ? `: ${result.revokedCount}` : ""}.`,
+    message: `Sessioni revocate correttamente${
+      typeof result.revokedCount === "number"
+        ? `: ${result.revokedCount}`
+        : ""
+    }.`,
   };
 }
 
@@ -157,7 +156,11 @@ export async function suspendLicenseAction(
 
   return {
     ok: true,
-    message: `Licenza sospesa correttamente${typeof result.revokedCount === "number" ? `; sessioni revocate: ${result.revokedCount}` : ""}.`,
+    message: `Licenza sospesa correttamente${
+      typeof result.revokedCount === "number"
+        ? `; sessioni revocate: ${result.revokedCount}`
+        : ""
+    }.`,
   };
 }
 
@@ -191,7 +194,9 @@ export async function reactivateLicenseAction(
 
   return {
     ok: true,
-    message: `Licenza aggiornata correttamente. Nuovo stato: ${result.licenseStatus || "ok"}.`,
+    message: `Licenza aggiornata correttamente. Nuovo stato: ${
+      result.licenseStatus ?? "ok"
+    }.`,
   };
 }
 
@@ -236,7 +241,11 @@ export async function changeStudioPasswordAction(
 
   return {
     ok: true,
-    message: `Password aggiornata correttamente${typeof result.revokedCount === "number" ? `; sessioni revocate: ${result.revokedCount}` : ""}.`,
+    message: `Password aggiornata correttamente${
+      typeof result.revokedCount === "number"
+        ? `; sessioni revocate: ${result.revokedCount}`
+        : ""
+    }.`,
   };
 }
 
@@ -320,7 +329,8 @@ export async function deleteStudioAction(
   if (confirmText !== "ELIMINA") {
     return {
       ok: false,
-      message: 'Per confermare la cancellazione devi scrivere esattamente "ELIMINA".',
+      message:
+        'Per confermare la cancellazione devi scrivere esattamente "ELIMINA".',
     };
   }
 

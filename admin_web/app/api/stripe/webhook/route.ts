@@ -6,7 +6,7 @@ import { getStripeServerClient, requireEnv } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
-type BillingCycle = "monthly" | "semiannual" | "annual";
+type PaidBillingCycle = "monthly" | "semiannual" | "annual";
 type LicenseStatus = "active" | "suspended" | "expired";
 
 type StripeInvoiceLineWithMaybePrice = Stripe.InvoiceLineItem & {
@@ -29,7 +29,7 @@ type ActivationEmailPayload = {
   studioName: string;
   recipientEmail: string;
   loginEmail: string;
-  billingCycle: BillingCycle;
+  billingCycle: PaidBillingCycle;
   licenseStartsAt: Date;
   licenseExpiresAt: Date;
   downloadUrl: string;
@@ -41,11 +41,28 @@ function addMonths(base: Date, months: number): Date {
   return d;
 }
 
+function isPaidBillingCycle(value: string): value is PaidBillingCycle {
+  return value === "monthly" || value === "semiannual" || value === "annual";
+}
+
+function requirePaidBillingCycle(
+  value: string,
+  context: string
+): PaidBillingCycle {
+  if (isPaidBillingCycle(value)) {
+    return value;
+  }
+
+  throw new Error(
+    `Billing cycle non compatibile con Stripe in ${context}: ${value}`
+  );
+}
+
 function getBillingCycleAndExpiry(
   plan: string,
   startsAt: Date
 ): {
-  billingCycle: BillingCycle;
+  billingCycle: PaidBillingCycle;
   expiresAt: Date;
 } {
   switch (plan) {
@@ -79,7 +96,7 @@ function unixToDate(value: number | null | undefined): Date | null {
 
 function getBillingCycleFromPrice(
   price: Stripe.Price | Stripe.DeletedPrice | null | undefined
-): BillingCycle | null {
+): PaidBillingCycle | null {
   if (!price || price.deleted) {
     return null;
   }
@@ -113,7 +130,7 @@ function getBillingCycleFromPrice(
 
 function getBillingCycleFromSubscription(
   subscription: Stripe.Subscription
-): BillingCycle | null {
+): PaidBillingCycle | null {
   const firstItem = subscription.items.data[0];
   return getBillingCycleFromPrice(firstItem?.price);
 }
@@ -125,7 +142,9 @@ function getInvoiceLinePrice(
   return maybePricedLine.price ?? null;
 }
 
-function getBillingCycleFromInvoice(invoice: Stripe.Invoice): BillingCycle | null {
+function getBillingCycleFromInvoice(
+  invoice: Stripe.Invoice
+): PaidBillingCycle | null {
   const subscriptionLine = invoice.lines.data.find((line) => {
     const price = getInvoiceLinePrice(line);
     const typedLine = line as StripeInvoiceLineWithMaybePrice;
@@ -199,7 +218,9 @@ function mapStripeSubscriptionStatusToLicenseStatus(
   }
 }
 
-async function hasProcessedWebhookEvent(stripeEventId: string): Promise<boolean> {
+async function hasProcessedWebhookEvent(
+  stripeEventId: string
+): Promise<boolean> {
   const existing = await prisma.stripeWebhookEvent.findUnique({
     where: {
       stripeEventId,
@@ -430,107 +451,105 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     );
   }
 
-  const activationEmailPayload = await prisma.$transaction<
-    ActivationEmailPayload | null
-  >(async (tx) => {
-    const studio = await tx.studio.create({
-      data: {
-        studioName: pendingCheckout.studioName,
-        loginEmail: pendingCheckout.loginEmail,
-        passwordHash: pendingCheckout.passwordHash,
-        licenseStatus: "active",
-        billingCycle,
-        licenseStartsAt: startsAt,
-        licenseExpiresAt: expiresAt,
-        billingName: pendingCheckout.billingName,
-        vatNumber: pendingCheckout.vatNumber,
-        taxCode: pendingCheckout.taxCode,
-        billingEmail: pendingCheckout.billingEmail,
-        recipientCode: pendingCheckout.recipientCode,
-        addressLine1: pendingCheckout.addressLine1,
-        city: pendingCheckout.city,
-        province: pendingCheckout.province,
-        postalCode: pendingCheckout.postalCode,
-        country: pendingCheckout.country,
-        stripeCustomerId: customerId,
-        stripeSubscriptionId: subscriptionId,
-        notes: "Creato automaticamente da checkout Stripe PECNOT",
-      },
-      select: {
-        id: true,
-        studioName: true,
-        loginEmail: true,
-        billingEmail: true,
-        billingCycle: true,
-        licenseStartsAt: true,
-        licenseExpiresAt: true,
-      },
-    });
-
-    await tx.pendingStudioCheckout.update({
-      where: {
-        id: pendingCheckout.id,
-      },
-      data: {
-        status: "completed",
-        stripeCustomerId: customerId,
-        stripeSubscriptionId: subscriptionId,
-        completedStudioId: studio.id,
-        completedAt: startsAt,
-      },
-    });
-
-    await tx.auditEvent.create({
-      data: {
-        studioId: studio.id,
-        eventType: "stripe_checkout_completed_new_studio",
-        eventPayload: {
-          email,
-          sessionId: session.id,
-          customerId,
-          subscriptionId,
-          plan,
-          pendingCheckoutId: pendingCheckout.id,
+  const activationEmailPayload: ActivationEmailPayload | null =
+    await prisma.$transaction(async (tx) => {
+      const studio = await tx.studio.create({
+        data: {
+          studioName: pendingCheckout.studioName,
+          loginEmail: pendingCheckout.loginEmail,
+          passwordHash: pendingCheckout.passwordHash,
+          licenseStatus: "active",
+          billingCycle,
+          licenseStartsAt: startsAt,
+          licenseExpiresAt: expiresAt,
           billingName: pendingCheckout.billingName,
           vatNumber: pendingCheckout.vatNumber,
           taxCode: pendingCheckout.taxCode,
           billingEmail: pendingCheckout.billingEmail,
           recipientCode: pendingCheckout.recipientCode,
+          addressLine1: pendingCheckout.addressLine1,
+          city: pendingCheckout.city,
+          province: pendingCheckout.province,
+          postalCode: pendingCheckout.postalCode,
+          country: pendingCheckout.country,
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: subscriptionId,
+          notes: "Creato automaticamente da checkout Stripe PECNOT",
         },
-      },
+        select: {
+          id: true,
+          studioName: true,
+          loginEmail: true,
+          billingEmail: true,
+          licenseStartsAt: true,
+          licenseExpiresAt: true,
+        },
+      });
+
+      await tx.pendingStudioCheckout.update({
+        where: {
+          id: pendingCheckout.id,
+        },
+        data: {
+          status: "completed",
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: subscriptionId,
+          completedStudioId: studio.id,
+          completedAt: startsAt,
+        },
+      });
+
+      await tx.auditEvent.create({
+        data: {
+          studioId: studio.id,
+          eventType: "stripe_checkout_completed_new_studio",
+          eventPayload: {
+            email,
+            sessionId: session.id,
+            customerId,
+            subscriptionId,
+            plan,
+            pendingCheckoutId: pendingCheckout.id,
+            billingName: pendingCheckout.billingName,
+            vatNumber: pendingCheckout.vatNumber,
+            taxCode: pendingCheckout.taxCode,
+            billingEmail: pendingCheckout.billingEmail,
+            recipientCode: pendingCheckout.recipientCode,
+          },
+        },
+      });
+
+      await tx.stripeWebhookEvent.create({
+        data: {
+          stripeEventId: event.id,
+          eventType: event.type,
+          payload: event as unknown as object,
+        },
+      });
+
+      const downloadUrl = process.env.PECNOT_DOWNLOAD_URL?.trim() || "";
+      if (!downloadUrl) {
+        console.error(
+          "PECNOT activation email skipped: PECNOT_DOWNLOAD_URL mancante in environment."
+        );
+        return null;
+      }
+
+      const recipientEmail =
+        studio.billingEmail?.trim().toLowerCase() ||
+        pendingCheckout.billingEmail?.trim().toLowerCase() ||
+        studio.loginEmail.trim().toLowerCase();
+
+      return {
+        studioName: studio.studioName,
+        recipientEmail,
+        loginEmail: studio.loginEmail,
+        billingCycle,
+        licenseStartsAt: studio.licenseStartsAt,
+        licenseExpiresAt: studio.licenseExpiresAt,
+        downloadUrl,
+      };
     });
-
-    await tx.stripeWebhookEvent.create({
-      data: {
-        stripeEventId: event.id,
-        eventType: event.type,
-        payload: event as unknown as object,
-      },
-    });
-
-    const downloadUrl = process.env.PECNOT_DOWNLOAD_URL?.trim() || "";
-    if (!downloadUrl) {
-      console.error(
-        "PECNOT activation email skipped: PECNOT_DOWNLOAD_URL mancante in environment."
-      );
-      return null;
-    }
-
-    const recipientEmail =
-      studio.billingEmail?.trim().toLowerCase() ||
-      pendingCheckout.billingEmail?.trim().toLowerCase() ||
-      studio.loginEmail.trim().toLowerCase();
-
-    return {
-      studioName: studio.studioName,
-      recipientEmail,
-      loginEmail: studio.loginEmail,
-      billingCycle: studio.billingCycle,
-      licenseStartsAt: studio.licenseStartsAt,
-      licenseExpiresAt: studio.licenseExpiresAt,
-      downloadUrl,
-    };
-  });
 
   if (!activationEmailPayload) {
     return;
@@ -569,8 +588,14 @@ async function handleInvoicePaid(event: Stripe.Event) {
     return;
   }
 
+  const fallbackBillingCycle = requirePaidBillingCycle(
+    studio.billingCycle,
+    "handleInvoicePaid"
+  );
+
   const period = getInvoicePeriod(invoice);
-  const billingCycle = getBillingCycleFromInvoice(invoice) ?? studio.billingCycle;
+  const billingCycle =
+    getBillingCycleFromInvoice(invoice) ?? fallbackBillingCycle;
   const licenseStartsAt = period.startsAt ?? studio.licenseStartsAt;
   const licenseExpiresAt =
     period.expiresAt ??
@@ -692,9 +717,14 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
     return;
   }
 
+  const fallbackBillingCycle = requirePaidBillingCycle(
+    studio.billingCycle,
+    "handleSubscriptionUpdated"
+  );
+
   const period = getSubscriptionPeriod(subscription);
   const billingCycle =
-    getBillingCycleFromSubscription(subscription) ?? studio.billingCycle;
+    getBillingCycleFromSubscription(subscription) ?? fallbackBillingCycle;
 
   const licenseStartsAt = period.startsAt ?? studio.licenseStartsAt;
   const licenseExpiresAt =

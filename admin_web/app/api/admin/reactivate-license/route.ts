@@ -6,8 +6,29 @@ type ReactivateLicenseBody = {
   loginEmail?: string;
 };
 
+type BillingCycle = "trial" | "monthly" | "semiannual" | "annual";
+type LicenseStatus = "active" | "trial" | "suspended" | "expired";
+
 function getAdminApiKey(request: Request): string {
   return request.headers.get("x-admin-api-key")?.trim() ?? "";
+}
+
+function getReactivatedStatus(params: {
+  billingCycle: BillingCycle;
+  licenseExpiresAt: Date;
+  now: Date;
+}): LicenseStatus {
+  const { billingCycle, licenseExpiresAt, now } = params;
+
+  if (licenseExpiresAt < now) {
+    return "expired";
+  }
+
+  if (billingCycle === "trial") {
+    return "trial";
+  }
+
+  return "active";
 }
 
 export async function POST(request: Request) {
@@ -56,6 +77,7 @@ export async function POST(request: Request) {
         id: true,
         studioName: true,
         loginEmail: true,
+        billingCycle: true,
         licenseStatus: true,
         licenseExpiresAt: true,
       },
@@ -72,10 +94,11 @@ export async function POST(request: Request) {
     }
 
     const now = new Date();
-    const nextStatus =
-      studio.licenseExpiresAt && studio.licenseExpiresAt < now
-        ? "expired"
-        : "active";
+    const nextStatus = getReactivatedStatus({
+      billingCycle: studio.billingCycle as BillingCycle,
+      licenseExpiresAt: studio.licenseExpiresAt,
+      now,
+    });
 
     await prisma.studio.update({
       where: {
@@ -92,8 +115,10 @@ export async function POST(request: Request) {
         eventType: "admin_reactivate_license",
         eventPayload: {
           loginEmail: studio.loginEmail,
+          billingCycle: studio.billingCycle,
           previousLicenseStatus: studio.licenseStatus,
           newLicenseStatus: nextStatus,
+          licenseExpiresAt: studio.licenseExpiresAt.toISOString(),
         },
       },
     });

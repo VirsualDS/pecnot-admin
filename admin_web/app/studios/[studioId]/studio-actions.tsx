@@ -10,14 +10,19 @@ import {
   updateStudioLicenseAction,
 } from "./actions";
 
+type LicenseStatus = "active" | "trial" | "suspended" | "expired";
+type BillingCycle = "trial" | "monthly" | "semiannual" | "annual";
+
 type StudioActionsProps = {
   studioId: string;
-  licenseStatus: "active" | "suspended" | "expired";
-  billingCycle: "monthly" | "semiannual" | "annual";
+  licenseStatus: LicenseStatus;
+  billingCycle: BillingCycle;
   licenseStartsAt: string;
   licenseExpiresAt: string;
   notes: string;
 };
+
+const TRIAL_DURATION_DAYS = 7;
 
 const initialState = {
   ok: false,
@@ -46,6 +51,13 @@ function MessageBox({
   );
 }
 
+function addDays(dateString: string, days: number): string {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function addMonths(dateString: string, months: number): string {
   const date = new Date(`${dateString}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return "";
@@ -53,13 +65,12 @@ function addMonths(dateString: string, months: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-function computeExpiresAt(
-  startsAt: string,
-  billingCycle: "monthly" | "semiannual" | "annual"
-): string {
+function computeExpiresAt(startsAt: string, billingCycle: BillingCycle): string {
   if (!startsAt) return "";
 
   switch (billingCycle) {
+    case "trial":
+      return addDays(startsAt, TRIAL_DURATION_DAYS);
     case "monthly":
       return addMonths(startsAt, 1);
     case "semiannual":
@@ -105,13 +116,30 @@ export default function StudioActions({
   );
 
   const [selectedBillingCycle, setSelectedBillingCycle] =
-    useState<"monthly" | "semiannual" | "annual">(billingCycle);
+    useState<BillingCycle>(billingCycle);
+
+  const [selectedLicenseStatus, setSelectedLicenseStatus] =
+    useState<LicenseStatus>(licenseStatus);
+
   const [selectedLicenseStartsAt, setSelectedLicenseStartsAt] =
     useState<string>(licenseStartsAt);
 
   const derivedLicenseExpiresAt = useMemo(() => {
     return computeExpiresAt(selectedLicenseStartsAt, selectedBillingCycle);
   }, [selectedBillingCycle, selectedLicenseStartsAt]);
+
+  function handleBillingCycleChange(nextBillingCycle: BillingCycle) {
+    setSelectedBillingCycle(nextBillingCycle);
+
+    if (nextBillingCycle === "trial") {
+      setSelectedLicenseStatus("trial");
+      return;
+    }
+
+    if (selectedLicenseStatus === "trial") {
+      setSelectedLicenseStatus("active");
+    }
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -159,13 +187,12 @@ export default function StudioActions({
                 name="billingCycle"
                 value={selectedBillingCycle}
                 onChange={(e) =>
-                  setSelectedBillingCycle(
-                    e.target.value as "monthly" | "semiannual" | "annual"
-                  )
+                  handleBillingCycleChange(e.target.value as BillingCycle)
                 }
                 disabled={licensePending}
                 className="rounded-xl border border-zinc-300 px-4 py-2.5 text-sm outline-none transition focus:border-zinc-500"
               >
+                <option value="trial">Trial</option>
                 <option value="monthly">Mensile</option>
                 <option value="semiannual">Semestrale</option>
                 <option value="annual">Annuale</option>
@@ -179,13 +206,22 @@ export default function StudioActions({
               <select
                 id="licenseStatus"
                 name="licenseStatus"
-                defaultValue={licenseStatus}
-                disabled={licensePending}
-                className="rounded-xl border border-zinc-300 px-4 py-2.5 text-sm outline-none transition focus:border-zinc-500"
+                value={selectedLicenseStatus}
+                onChange={(e) =>
+                  setSelectedLicenseStatus(e.target.value as LicenseStatus)
+                }
+                disabled={licensePending || selectedBillingCycle === "trial"}
+                className="rounded-xl border border-zinc-300 px-4 py-2.5 text-sm outline-none transition focus:border-zinc-500 disabled:bg-zinc-100 disabled:text-zinc-500"
               >
-                <option value="active">Attiva</option>
-                <option value="suspended">Sospesa</option>
-                <option value="expired">Scaduta</option>
+                {selectedBillingCycle === "trial" ? (
+                  <option value="trial">Trial</option>
+                ) : (
+                  <>
+                    <option value="active">Attiva</option>
+                    <option value="suspended">Sospesa</option>
+                    <option value="expired">Scaduta</option>
+                  </>
+                )}
               </select>
             </div>
 
@@ -218,6 +254,13 @@ export default function StudioActions({
               />
             </div>
           </div>
+
+          {selectedBillingCycle === "trial" ? (
+            <p className="text-sm leading-6 text-sky-700">
+              In modalità trial lo stato resta forzato su <strong>trial</strong> e la
+              scadenza viene calcolata automaticamente a 7 giorni dalla data di inizio.
+            </p>
+          ) : null}
 
           <div className="flex flex-col gap-2">
             <label htmlFor="notes" className="text-sm font-medium text-zinc-700">

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-type LicenseStatus = "active" | "suspended" | "expired";
-type BillingCycle = "monthly" | "semiannual" | "annual";
+type LicenseStatus = "active" | "trial" | "suspended" | "expired";
+type BillingCycle = "trial" | "monthly" | "semiannual" | "annual";
 
 type UpdateStudioLicenseBody = {
   studioId?: string;
@@ -13,16 +13,34 @@ type UpdateStudioLicenseBody = {
   notes?: string;
 };
 
+const TRIAL_DURATION_DAYS = 7;
+
 function getAdminApiKey(request: Request): string {
   return request.headers.get("x-admin-api-key")?.trim() ?? "";
 }
 
 function isValidBillingCycle(value: string): value is BillingCycle {
-  return value === "monthly" || value === "semiannual" || value === "annual";
+  return (
+    value === "trial" ||
+    value === "monthly" ||
+    value === "semiannual" ||
+    value === "annual"
+  );
 }
 
 function isValidLicenseStatus(value: string): value is LicenseStatus {
-  return value === "active" || value === "suspended" || value === "expired";
+  return (
+    value === "active" ||
+    value === "trial" ||
+    value === "suspended" ||
+    value === "expired"
+  );
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result;
 }
 
 function addMonths(date: Date, months: number): Date {
@@ -36,6 +54,8 @@ function computeLicenseExpiresAt(
   billingCycle: BillingCycle
 ): Date {
   switch (billingCycle) {
+    case "trial":
+      return addDays(licenseStartsAt, TRIAL_DURATION_DAYS);
     case "monthly":
       return addMonths(licenseStartsAt, 1);
     case "semiannual":
@@ -43,6 +63,23 @@ function computeLicenseExpiresAt(
     case "annual":
       return addMonths(licenseStartsAt, 12);
   }
+}
+
+function isConsistentTrialCombination(params: {
+  billingCycle: BillingCycle;
+  licenseStatus: LicenseStatus;
+}): boolean {
+  const { billingCycle, licenseStatus } = params;
+
+  if (billingCycle === "trial" && licenseStatus !== "trial") {
+    return false;
+  }
+
+  if (licenseStatus === "trial" && billingCycle !== "trial") {
+    return false;
+  }
+
+  return true;
 }
 
 export async function POST(request: Request) {
@@ -94,6 +131,22 @@ export async function POST(request: Request) {
       );
     }
 
+    if (
+      !isConsistentTrialCombination({
+        billingCycle: billingCycleRaw,
+        licenseStatus: licenseStatusRaw,
+      })
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Combinazione non valida: una licenza trial deve usare billingCycle trial e viceversa",
+        },
+        { status: 400 }
+      );
+    }
+
     if (!licenseStartsAtRaw) {
       return NextResponse.json(
         { ok: false, error: "licenseStartsAt è obbligatoria" },
@@ -136,8 +189,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const notes =
-      typeof notesRaw === "string" ? notesRaw.trim() || null : null;
+    const notes = typeof notesRaw === "string" ? notesRaw.trim() || null : null;
 
     await prisma.studio.update({
       where: {

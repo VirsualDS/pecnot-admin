@@ -7,6 +7,30 @@ type LicenseCheckBody = {
   machineFingerprint?: string;
 };
 
+type LicenseStatus = "active" | "trial" | "suspended" | "expired";
+
+function getEffectiveLicenseStatus(params: {
+  storedStatus: LicenseStatus;
+  licenseExpiresAt: Date;
+  now: Date;
+}): LicenseStatus {
+  const { storedStatus, licenseExpiresAt, now } = params;
+
+  if (storedStatus === "suspended") {
+    return "suspended";
+  }
+
+  if (storedStatus === "expired" || licenseExpiresAt < now) {
+    return "expired";
+  }
+
+  if (storedStatus === "trial") {
+    return "trial";
+  }
+
+  return "active";
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as LicenseCheckBody;
@@ -68,9 +92,13 @@ export async function POST(request: Request) {
 
     const now = new Date();
     const studio = clientSession.studio;
-    const isExpired = studio.licenseExpiresAt < now;
+    const effectiveLicenseStatus = getEffectiveLicenseStatus({
+      storedStatus: studio.licenseStatus,
+      licenseExpiresAt: studio.licenseExpiresAt,
+      now,
+    });
 
-    if (studio.licenseStatus === "suspended") {
+    if (effectiveLicenseStatus === "suspended") {
       return NextResponse.json(
         {
           ok: false,
@@ -81,7 +109,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (studio.licenseStatus === "expired" || isExpired) {
+    if (effectiveLicenseStatus === "expired") {
       return NextResponse.json(
         {
           ok: false,
@@ -128,6 +156,10 @@ export async function POST(request: Request) {
           clientSessionId: clientSession.id,
           installationId: clientSession.installation.id,
           machineFingerprint,
+          licenseStatus: effectiveLicenseStatus,
+          billingCycle: studio.billingCycle,
+          licenseStartsAt: studio.licenseStartsAt.toISOString(),
+          licenseExpiresAt: studio.licenseExpiresAt.toISOString(),
         },
       },
     });
@@ -140,7 +172,7 @@ export async function POST(request: Request) {
         loginEmail: studio.loginEmail,
       },
       license: {
-        status: "active",
+        status: effectiveLicenseStatus,
         billingCycle: studio.billingCycle,
         licenseStartsAt: studio.licenseStartsAt,
         licenseExpiresAt: studio.licenseExpiresAt,

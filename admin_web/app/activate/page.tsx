@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-type PecnotPlan = "monthly" | "semiannual" | "annual";
+type PecnotPlan = "trial" | "monthly" | "semiannual" | "annual";
 
 type FieldErrors = {
   studioName?: string;
@@ -29,7 +29,15 @@ const PLAN_OPTIONS: Array<{
   title: string;
   price: string;
   subtitle: string;
+  description?: string;
 }> = [
+  {
+    value: "trial",
+    title: "Prova gratuita",
+    price: "€0",
+    subtitle: "7 giorni gratuiti",
+    description: "Nessun addebito automatico. Alla scadenza scegli tu se acquistare.",
+  },
   {
     value: "monthly",
     title: "Mensile",
@@ -53,7 +61,12 @@ const PLAN_OPTIONS: Array<{
 const MIN_PASSWORD_LENGTH = 8;
 
 function isValidPlan(value: string | null): value is PecnotPlan {
-  return value === "monthly" || value === "semiannual" || value === "annual";
+  return (
+    value === "trial" ||
+    value === "monthly" ||
+    value === "semiannual" ||
+    value === "annual"
+  );
 }
 
 function normalizeEmail(value: string): string {
@@ -91,6 +104,10 @@ function ActivatePageInner() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState("");
+
+  const submitLabel = useMemo(() => {
+    return selectedPlan === "trial" ? "Attiva prova gratuita" : "Continua al pagamento";
+  }, [selectedPlan]);
 
   function validate(): boolean {
     const nextErrors: FieldErrors = {};
@@ -241,11 +258,11 @@ function ActivatePageInner() {
             data.error || "Controlla il campo indicato.";
         } else {
           nextErrors.general =
-            data.error || "Errore durante la preparazione del checkout.";
+            data.error || "Errore durante la preparazione dell’attivazione.";
         }
 
         setFieldErrors(nextErrors);
-        setMessage(data.error || "Impossibile avviare il checkout.");
+        setMessage(data.error || "Impossibile proseguire con l’attivazione.");
         setIsSubmitting(false);
         return;
       }
@@ -254,9 +271,9 @@ function ActivatePageInner() {
     } catch (error) {
       console.error("Activate page checkout error:", error);
       setFieldErrors({
-        general: "Errore di rete o server durante l’avvio del checkout.",
+        general: "Errore di rete o server durante l’avvio dell’attivazione.",
       });
-      setMessage("Errore di rete o server durante l’avvio del checkout.");
+      setMessage("Errore di rete o server durante l’avvio dell’attivazione.");
       setIsSubmitting(false);
     }
   }
@@ -282,8 +299,8 @@ function ActivatePageInner() {
             </h1>
             <p className="mt-4 text-[18px] leading-8 text-[#34445d]">
               Crea il tuo account licenza, inserisci i dati di fatturazione, scegli il piano
-              e completa il pagamento. Dopo la conferma potrai accedere al client desktop
-              PECNOT con le credenziali inserite qui.
+              e continua. Se selezioni la prova gratuita attivi subito 7 giorni senza
+              addebito automatico. Se selezioni un piano a pagamento verrai inviato al checkout.
             </p>
           </div>
         </header>
@@ -643,6 +660,15 @@ function ActivatePageInner() {
                             >
                               {plan.subtitle}
                             </p>
+                            {plan.description ? (
+                              <p
+                                className={`mt-2 text-sm leading-6 ${
+                                  active ? "text-white/85" : "text-[#43546f]"
+                                }`}
+                              >
+                                {plan.description}
+                              </p>
+                            ) : null}
                           </div>
                           <div className="text-right">
                             <p className="text-2xl font-extrabold">{plan.price}</p>
@@ -668,7 +694,7 @@ function ActivatePageInner() {
                   disabled={isSubmitting}
                   className="inline-flex w-full items-center justify-center rounded-2xl bg-[#053580] px-4 py-4 text-sm font-bold text-white transition hover:bg-[#042d6d] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isSubmitting ? "Preparazione checkout..." : "Continua al pagamento"}
+                  {isSubmitting ? "Preparazione attivazione..." : submitLabel}
                 </button>
               </div>
             </form>
@@ -695,10 +721,15 @@ function ActivatePageInner() {
                 <p className="text-sm font-bold text-[#053580]">Cosa succede dopo</p>
                 <div className="mt-4 space-y-3 text-sm leading-7 text-[#43546f]">
                   <p>1. Inserisci i dati account e di fatturazione.</p>
-                  <p>2. Scegli il piano e vai al checkout Stripe.</p>
-                  <p>3. Dopo il pagamento la licenza si attiva automaticamente.</p>
-                  <p>4. Scarichi PECNOT e accedi con le credenziali appena create.</p>
+                  <p>2. Scegli se attivare la prova gratuita o andare al checkout.</p>
+                  <p>3. La licenza si attiva e puoi scaricare PECNOT.</p>
+                  <p>4. Accedi al client desktop con le credenziali appena create.</p>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-[rgba(5,53,128,0.16)] bg-[#eef4ff] p-5 text-sm leading-7 text-[#24406e]">
+                La prova gratuita dura 7 giorni, non prevede addebiti automatici e
+                ti permette di verificare il flusso reale prima dell’acquisto.
               </div>
 
               <div className="rounded-2xl border border-[rgba(5,53,128,0.16)] bg-[#eef4ff] p-5 text-sm leading-7 text-[#24406e]">

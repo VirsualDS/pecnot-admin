@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type LicenseStatus = "active" | "trial" | "suspended" | "expired";
+
 function formatDate(value: Date | null): string {
   if (!value) return "—";
 
@@ -13,10 +15,12 @@ function formatDate(value: Date | null): string {
   }).format(value);
 }
 
-function getLicenseBadgeClass(status: "active" | "suspended" | "expired"): string {
+function getLicenseBadgeClass(status: LicenseStatus): string {
   switch (status) {
     case "active":
       return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+    case "trial":
+      return "bg-sky-50 text-sky-700 ring-1 ring-sky-200";
     case "suspended":
       return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
     case "expired":
@@ -26,10 +30,12 @@ function getLicenseBadgeClass(status: "active" | "suspended" | "expired"): strin
   }
 }
 
-function getLicenseLabel(status: "active" | "suspended" | "expired"): string {
+function getLicenseLabel(status: LicenseStatus): string {
   switch (status) {
     case "active":
       return "Attiva";
+    case "trial":
+      return "Trial";
     case "suspended":
       return "Sospesa";
     case "expired":
@@ -45,6 +51,7 @@ export default async function HomePage() {
   const [
     totalStudios,
     activeStudios,
+    trialStudios,
     suspendedStudios,
     expiredStudios,
     activeSessions,
@@ -55,6 +62,14 @@ export default async function HomePage() {
     prisma.studio.count({
       where: {
         licenseStatus: "active",
+      },
+    }),
+    prisma.studio.count({
+      where: {
+        licenseStatus: "trial",
+        licenseExpiresAt: {
+          gte: now,
+        },
       },
     }),
     prisma.studio.count({
@@ -126,7 +141,7 @@ export default async function HomePage() {
           </div>
         </header>
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Studi totali</p>
             <p className="mt-3 text-3xl font-semibold tracking-tight">{totalStudios}</p>
@@ -135,6 +150,11 @@ export default async function HomePage() {
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Licenze attive</p>
             <p className="mt-3 text-3xl font-semibold tracking-tight">{activeStudios}</p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <p className="text-sm text-zinc-500">Trial attive</p>
+            <p className="mt-3 text-3xl font-semibold tracking-tight">{trialStudios}</p>
           </div>
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -212,10 +232,10 @@ export default async function HomePage() {
                       <td className="px-5 py-4">
                         <span
                           className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getLicenseBadgeClass(
-                            studio.licenseStatus
+                            studio.licenseStatus as LicenseStatus
                           )}`}
                         >
-                          {getLicenseLabel(studio.licenseStatus)}
+                          {getLicenseLabel(studio.licenseStatus as LicenseStatus)}
                         </span>
                       </td>
                       <td className="px-5 py-4 text-zinc-600">

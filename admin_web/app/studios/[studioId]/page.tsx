@@ -6,6 +6,9 @@ import StudioActions from "./studio-actions";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type LicenseStatus = "active" | "trial" | "suspended" | "expired";
+type BillingCycle = "trial" | "monthly" | "semiannual" | "annual";
+
 function formatDate(value: Date | null): string {
   if (!value) return "—";
 
@@ -20,10 +23,12 @@ function formatDateInput(value: Date | null): string {
   return value.toISOString().slice(0, 10);
 }
 
-function getLicenseBadgeClass(status: "active" | "suspended" | "expired"): string {
+function getLicenseBadgeClass(status: LicenseStatus): string {
   switch (status) {
     case "active":
       return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+    case "trial":
+      return "bg-sky-50 text-sky-700 ring-1 ring-sky-200";
     case "suspended":
       return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
     case "expired":
@@ -33,10 +38,12 @@ function getLicenseBadgeClass(status: "active" | "suspended" | "expired"): strin
   }
 }
 
-function getLicenseLabel(status: "active" | "suspended" | "expired"): string {
+function getLicenseLabel(status: LicenseStatus): string {
   switch (status) {
     case "active":
       return "Attiva";
+    case "trial":
+      return "Trial";
     case "suspended":
       return "Sospesa";
     case "expired":
@@ -57,7 +64,9 @@ type StudioDetailPageProps = {
   }>;
 };
 
-export default async function StudioDetailPage({ params }: StudioDetailPageProps) {
+export default async function StudioDetailPage({
+  params,
+}: StudioDetailPageProps) {
   const { studioId } = await params;
 
   const studio = await prisma.studio.findUnique({
@@ -131,8 +140,22 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
     notFound();
   }
 
-  const activeInstallations = studio.installations.filter((item) => !item.isRevoked).length;
-  const activeSessions = studio.clientSessions.filter((item) => !item.isRevoked).length;
+  const activeInstallations = studio.installations.filter(
+    (item) => !item.isRevoked
+  ).length;
+  const activeSessions = studio.clientSessions.filter(
+    (item) => !item.isRevoked
+  ).length;
+
+  const address = [
+    studio.addressLine1?.trim(),
+    studio.postalCode?.trim(),
+    studio.city?.trim(),
+    studio.province?.trim(),
+    studio.country?.trim(),
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900">
@@ -170,17 +193,19 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
             <div className="mt-3">
               <span
                 className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getLicenseBadgeClass(
-                  studio.licenseStatus
+                  studio.licenseStatus as LicenseStatus
                 )}`}
               >
-                {getLicenseLabel(studio.licenseStatus)}
+                {getLicenseLabel(studio.licenseStatus as LicenseStatus)}
               </span>
             </div>
           </div>
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Installazioni attive</p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight">{activeInstallations}</p>
+            <p className="mt-3 text-3xl font-semibold tracking-tight">
+              {activeInstallations}
+            </p>
             <p className="mt-2 text-xs text-zinc-500">
               Totali registrate: {studio._count.installations}
             </p>
@@ -188,7 +213,9 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Sessioni attive</p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight">{activeSessions}</p>
+            <p className="mt-3 text-3xl font-semibold tracking-tight">
+              {activeSessions}
+            </p>
             <p className="mt-2 text-xs text-zinc-500">
               Totali registrate: {studio._count.clientSessions}
             </p>
@@ -196,7 +223,9 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Audit events</p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight">{studio._count.auditEvents}</p>
+            <p className="mt-3 text-3xl font-semibold tracking-tight">
+              {studio._count.auditEvents}
+            </p>
           </div>
         </section>
 
@@ -213,28 +242,36 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Studio ID
                 </p>
-                <p className="mt-1 break-all text-sm text-zinc-800">{studio.id}</p>
+                <p className="mt-1 break-all text-sm text-zinc-800">
+                  {studio.id}
+                </p>
               </div>
 
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Ciclo billing
                 </p>
-                <p className="mt-1 text-sm text-zinc-800">{studio.billingCycle}</p>
+                <p className="mt-1 text-sm text-zinc-800">
+                  {studio.billingCycle}
+                </p>
               </div>
 
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Inizio licenza
                 </p>
-                <p className="mt-1 text-sm text-zinc-800">{formatDate(studio.licenseStartsAt)}</p>
+                <p className="mt-1 text-sm text-zinc-800">
+                  {formatDate(studio.licenseStartsAt)}
+                </p>
               </div>
 
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Scadenza licenza
                 </p>
-                <p className="mt-1 text-sm text-zinc-800">{formatDate(studio.licenseExpiresAt)}</p>
+                <p className="mt-1 text-sm text-zinc-800">
+                  {formatDate(studio.licenseExpiresAt)}
+                </p>
               </div>
 
               <div>
@@ -250,18 +287,24 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Ultimo aggiornamento record
                 </p>
-                <p className="mt-1 text-sm text-zinc-800">{formatDate(studio.updatedAt)}</p>
+                <p className="mt-1 text-sm text-zinc-800">
+                  {formatDate(studio.updatedAt)}
+                </p>
               </div>
 
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Creato il
                 </p>
-                <p className="mt-1 text-sm text-zinc-800">{formatDate(studio.createdAt)}</p>
+                <p className="mt-1 text-sm text-zinc-800">
+                  {formatDate(studio.createdAt)}
+                </p>
               </div>
 
               <div className="sm:col-span-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Note</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Note
+                </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-800">
                   {studio.notes?.trim() || "Nessuna nota presente."}
                 </p>
@@ -271,8 +314,8 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
 
           <StudioActions
             studioId={studio.id}
-            licenseStatus={studio.licenseStatus}
-            billingCycle={studio.billingCycle}
+            licenseStatus={studio.licenseStatus as LicenseStatus}
+            billingCycle={studio.billingCycle as BillingCycle}
             licenseStartsAt={formatDateInput(studio.licenseStartsAt)}
             licenseExpiresAt={formatDateInput(studio.licenseExpiresAt)}
             notes={studio.notes ?? ""}
@@ -294,21 +337,27 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Intestazione fattura
               </p>
-              <p className="mt-1 text-sm text-zinc-800">{displayValue(studio.billingName)}</p>
+              <p className="mt-1 text-sm text-zinc-800">
+                {displayValue(studio.billingName)}
+              </p>
             </div>
 
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Partita IVA
               </p>
-              <p className="mt-1 text-sm text-zinc-800">{displayValue(studio.vatNumber)}</p>
+              <p className="mt-1 text-sm text-zinc-800">
+                {displayValue(studio.vatNumber)}
+              </p>
             </div>
 
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Codice fiscale
               </p>
-              <p className="mt-1 text-sm text-zinc-800">{displayValue(studio.taxCode)}</p>
+              <p className="mt-1 text-sm text-zinc-800">
+                {displayValue(studio.taxCode)}
+              </p>
             </div>
 
             <div>
@@ -324,31 +373,25 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Codice SDI
               </p>
-              <p className="mt-1 text-sm text-zinc-800">{displayValue(studio.recipientCode)}</p>
+              <p className="mt-1 text-sm text-zinc-800">
+                {displayValue(studio.recipientCode)}
+              </p>
             </div>
 
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Nazione
               </p>
-              <p className="mt-1 text-sm text-zinc-800">{displayValue(studio.country)}</p>
+              <p className="mt-1 text-sm text-zinc-800">
+                {displayValue(studio.country)}
+              </p>
             </div>
 
             <div className="sm:col-span-2 lg:col-span-3">
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Indirizzo
               </p>
-              <p className="mt-1 text-sm text-zinc-800">
-                {[
-                  studio.addressLine1?.trim(),
-                  studio.postalCode?.trim(),
-                  studio.city?.trim(),
-                  studio.province?.trim(),
-                  studio.country?.trim(),
-                ]
-                  .filter(Boolean)
-                  .join(", ") || "—"}
-              </p>
+              <p className="mt-1 text-sm text-zinc-800">{address || "—"}</p>
             </div>
           </div>
         </section>
@@ -380,7 +423,10 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
               <tbody className="divide-y divide-zinc-100">
                 {studio.installations.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-5 py-8 text-center text-zinc-500">
+                    <td
+                      colSpan={8}
+                      className="px-5 py-8 text-center text-zinc-500"
+                    >
                       Nessuna installazione registrata.
                     </td>
                   </tr>
@@ -390,11 +436,15 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
                       <td className="px-5 py-4 text-zinc-900">
                         {item.machineName?.trim() || "—"}
                       </td>
-                      <td className="px-5 py-4 text-zinc-600">{item.osName?.trim() || "—"}</td>
+                      <td className="px-5 py-4 text-zinc-600">
+                        {item.osName?.trim() || "—"}
+                      </td>
                       <td className="px-5 py-4 text-zinc-600">
                         {item.appVersion?.trim() || "—"}
                       </td>
-                      <td className="px-5 py-4 text-zinc-600">{item.lastIp?.trim() || "—"}</td>
+                      <td className="px-5 py-4 text-zinc-600">
+                        {item.lastIp?.trim() || "—"}
+                      </td>
                       <td className="px-5 py-4 break-all text-zinc-600">
                         {item.machineFingerprint}
                       </td>
@@ -448,18 +498,25 @@ export default async function StudioDetailPage({ params }: StudioDetailPageProps
               <tbody className="divide-y divide-zinc-100">
                 {studio.clientSessions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-8 text-center text-zinc-500">
+                    <td
+                      colSpan={6}
+                      className="px-5 py-8 text-center text-zinc-500"
+                    >
                       Nessuna sessione registrata.
                     </td>
                   </tr>
                 ) : (
                   studio.clientSessions.map((session) => (
                     <tr key={session.id} className="align-top">
-                      <td className="px-5 py-4 break-all text-zinc-900">{session.id}</td>
+                      <td className="px-5 py-4 break-all text-zinc-900">
+                        {session.id}
+                      </td>
                       <td className="px-5 py-4 break-all text-zinc-600">
                         {session.installationId || "—"}
                       </td>
-                      <td className="px-5 py-4 text-zinc-600">{formatDate(session.issuedAt)}</td>
+                      <td className="px-5 py-4 text-zinc-600">
+                        {formatDate(session.issuedAt)}
+                      </td>
                       <td className="px-5 py-4 text-zinc-600">
                         {formatDate(session.lastValidatedAt)}
                       </td>

@@ -9,11 +9,13 @@ datasource db {
 
 enum LicenseStatus {
   active
+  trial
   suspended
   expired
 }
 
 enum BillingCycle {
+  trial
   monthly
   semiannual
   annual
